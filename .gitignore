@@ -1,0 +1,7 @@
+dataset_test/input_images/*
+dataset_test/output/*
+MeshroomCache
+.venv
+__pycache__
+*.pyc
+.env
