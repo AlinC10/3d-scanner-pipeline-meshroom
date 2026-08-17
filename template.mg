@@ -365,14 +365,14 @@
             "inputs": {
                 "inputMesh": "{Meshing_1.outputMesh}",
                 "outputMeshFileType": "obj",
-                "keepLargestMeshOnly": false,
+                "keepLargestMeshOnly": true,
                 "smoothingSubset": "all",
                 "smoothingBoundariesNeighbours": 0,
-                "smoothingIterations": 5,
+                "smoothingIterations": 1,
                 "smoothingLambda": 1.0,
                 "filteringSubset": "all",
                 "filteringIterations": 1,
-                "filterLargeTrianglesFactor": 60.0,
+                "filterLargeTrianglesFactor": 30.0,
                 "filterTrianglesRatio": 0.0,
                 "verboseLevel": "info"
             },
@@ -409,7 +409,7 @@
                 "smoothingLambda": 1.0,
                 "filteringSubset": "all",
                 "filteringIterations": 1,
-                "filterLargeTrianglesFactor": 60.0,
+                "filterLargeTrianglesFactor": 0.0,
                 "filterTrianglesRatio": 0.0,
                 "verboseLevel": "info"
             },
@@ -630,7 +630,7 @@
                 "normalsFolder": "",
                 "inputMesh": "{MeshFiltering_1.outputMesh}",
                 "inputRefMesh": "",
-                "textureSide": 8192,
+                "textureSide": 4096,
                 "downscale": 1,
                 "outputMeshFileType": "obj",
                 "colorMapping": {
@@ -651,7 +651,7 @@
                 "useUDIM": false,
                 "fillHoles": false,
                 "padding": 5,
-                "multiBandDownscale": 4,
+                "multiBandDownscale": 2,
                 "multiBandNbContrib": {
                     "high": 1,
                     "midHigh": 5,

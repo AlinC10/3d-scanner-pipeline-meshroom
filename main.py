@@ -5,26 +5,22 @@ import subprocess
 import shutil
 import sys
 import tempfile
-# pyrefly: ignore [missing-import]
 import trimesh
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# ==========================================
-# CONSTANTS
-# ==========================================
-MESHROOM_EXE = (
-    os.environ.get("MESHROOM_EXE")
-    or shutil.which("meshroom_batch")
-    or r"C:\path\to\Meshroom-2025.1.0\meshroom_batch.exe"
-)
+import images
 
 
-# ==========================================
-# UTILITY FUNCTIONS
-# ==========================================
 
+# === CONSTANTS ===
+# MESHROOM_EXE="../runpod_volume/Meshroom-2025.1.0/meshroom_batch.exe"
+MESHROOM_EXE="D:/Meshroom-2025.1.0/meshroom_batch.exe"
+
+OUTPUT_DIR="./dataset_test/output"
+# OUTPUT_DIR="./runpod_volume/output"
+
+TEMPLATE_MG="./template.mg"
+
+
+# === UTILITY FUNCTIONS ===
 def prepare_pipeline(template_path, temp_mg_path):
     """
     Reads the .mg JSON template and saves it as a temporary file.
@@ -158,9 +154,26 @@ def convert_obj_to_glb(obj_folder, glb_path):
         print(f"\n  [GLB] Converting OBJ -> GLB...")
         print(f"        Source: {obj_folder}")
 
-        # Load as Scene to preserve materials and texture references.
-        # trimesh resolves MTL + texture paths relative to the OBJ location.
-        scene = trimesh.load(obj_path)
+        # IMPORTANT: force='scene' is required so trimesh always returns a Scene
+        # object that preserves multi-material / texture references.
+        # Without it, trimesh may collapse a single-mesh OBJ into a bare Trimesh,
+        # silently dropping the MTL material and all texture data → untextured GLB.
+        # process=False prevents trimesh from merging/simplifying geometry in ways
+        # that strip material assignments before export.
+        scene = trimesh.load(obj_path, process=False, force="scene")
+
+        # Diagnostic: warn if no materials were loaded (textures will be missing)
+        if hasattr(scene, "geometry"):
+            has_materials = any(
+                getattr(geom, "visual", None) is not None
+                and hasattr(geom.visual, "material")
+                and geom.visual.material is not None
+                for geom in scene.geometry.values()
+            )
+            if not has_materials:
+                print("  [GLB] WARNING: No materials detected after load — "
+                      "check that the .mtl file and JPG textures are present "
+                      "in the same folder as the OBJ.")
 
         # Export as binary glTF (.glb) — embeds geometry + textures in one file
         with open(glb_path, "wb") as f:
@@ -178,11 +191,9 @@ def convert_obj_to_glb(obj_folder, glb_path):
         print(f"  [GLB] Conversion error: {e}")
 
 
-# ==========================================
-# MAIN PIPELINE
-# ==========================================
+# === MAIN PIPELINE ===
 
-def run_pipeline(input_images_dir, output_dir, template_path):
+def run_pipeline(output_dir, template_path):
     """
     Orchestrates the full Meshroom photogrammetry pipeline:
 
@@ -195,10 +206,6 @@ def run_pipeline(input_images_dir, output_dir, template_path):
             - High branch -> STL for 3D printing
             - Low branch  -> GLB for web (single binary, embedded textures)
     """
-    if not os.path.exists(input_images_dir):
-        print(f"[ERROR] Input images folder not found: {input_images_dir}")
-        return
-
     if not os.path.exists(MESHROOM_EXE):
         print(f"[ERROR] Meshroom executable not found: {MESHROOM_EXE}")
         return
@@ -210,11 +217,12 @@ def run_pipeline(input_images_dir, output_dir, template_path):
     cache_dir      = os.path.join(output_dir_abs, "MeshroomCache")
     # Fallback: default location where Meshroom writes when TMPDIR is not set
     sys_cache_dir  = os.path.join(tempfile.gettempdir(), "MeshroomCache")
-
+    input_images_abs_dir = images.get_file_path()
+    
     print(f"\n{'='*55}")
     print(f"  MESHROOM PIPELINE - INITIALIZATION")
     print(f"{'='*55}")
-    print(f"  Input images: {os.path.abspath(input_images_dir)}")
+    print(f"  Input images: {input_images_abs_dir}")
     print(f"  Output dir:   {output_dir_abs}")
 
     # -- Step 1: Prepare template ----------------------------------------
@@ -226,7 +234,7 @@ def run_pipeline(input_images_dir, output_dir, template_path):
     command = [
         MESHROOM_EXE,
         "--pipeline", temp_mg_path,
-        "--input",    os.path.abspath(input_images_dir),
+        "--input",    input_images_abs_dir,
         "--cache",    cache_dir,
         "--verbose",  "info",
     ]
@@ -343,12 +351,6 @@ def run_pipeline(input_images_dir, output_dir, template_path):
     print(f"{'='*55}\n")
 
 
-# ==========================================
-# CONFIGURATION & ENTRY POINT
-# ==========================================
+# === CONFIGURATION & ENTRY POINT ===
 if __name__ == "__main__":
-    INPUT_IMAGES = "./dataset_test/input_images"
-    OUTPUT_DIR   = "./dataset_test/output"
-    TEMPLATE_MG  = "./template.mg"
-
-    run_pipeline(INPUT_IMAGES, OUTPUT_DIR, TEMPLATE_MG)
+    run_pipeline(OUTPUT_DIR, TEMPLATE_MG)
