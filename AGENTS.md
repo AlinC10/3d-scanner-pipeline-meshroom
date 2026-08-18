@@ -1,9 +1,12 @@
 # Project Context
 
-This project automates a photogrammetry pipeline using the AliceVision engine (Meshroom) and a Python orchestration script. The main goal is to process a set of standard images (no turntable, no AI background masks in this iteration) and simultaneously generate two versions of the same 3D model:
+This project automates a photogrammetry pipeline using the AliceVision engine (Meshroom) and a Python orchestration script. The system is designed to be deployed as a Dockerized Serverless API on the **RunPod** platform. It integrates with Cloudflare R2 for downloading input image datasets and uploading the final 3D model assets.
 
-- **High/HD Version**: For 3D printing (STL export) or detailed visualization (LOD High).
-- **Low/Web Version**: For fast loading on a web platform (LOD Low, GLB export).
+The pipeline processes standard images (no turntable, no AI background masks) and simultaneously generates three distinct versions of the same 3D model:
+
+1. **High/HD Version**: A high-poly `.obj` with lossless `.png` textures for game development, VFX, and detailed visualization.
+2. **Printable Version**: A watertight `.stl` extracted from the high-poly geometry for 3D printing.
+3. **Low/Web Version**: A low-poly `.glb` (binary glTF) with compressed `.jpg` textures optimized for fast loading on web and mobile platforms.
 
 ---
 
@@ -11,7 +14,7 @@ This project automates a photogrammetry pipeline using the AliceVision engine (M
 
 The base template excludes all AI segmentation nodes (`ImageDetectionPrompt`, `ImageSegmentationBox`), relying on classic background extraction for camera alignment.
 
-The Meshroom graph forks after generating the base geometry (MeshFiltering_1).
+The Meshroom graph forks after generating the base geometry (`MeshFiltering_1`).
 
 ## Core Branch
 
@@ -30,16 +33,16 @@ Connected directly from `MeshFiltering_1`.
 **Texturing_1 settings:**
 | Setting | Value | Notes |
 |---|---|---|
-| Texture Side | 8192 | Maximum texture resolution |
+| Texture Side | 4096 | High texture resolution (down from 8192 for stability/speed) |
 | Downscale | 1 | Full resolution, no downscaling |
-| Output Format | `.obj` | Converted to `.stl` by the Python script |
+| Output Format | `.obj` | Left as-is for VFX/Gaming, and also converted to `.stl` |
 | Color Mapping | PNG | Lossless texture format |
 | Unwrap Method | **Basic** | Only stable method (see Known Issues) |
 | useUDIM | false | Single texture tile, simpler to manage |
 | bumpMapping | **false** | See Known Issues — must stay disabled |
 | displacementMapping | **false** | See Known Issues — must stay disabled |
 
-**Purpose**: Rich raw geometry (~100k+ polygons) with a very clear texture. Large file size (15-30+ MB), used only on explicit user request or for 3D printing.
+**Purpose**: Rich raw geometry with a very clear texture. Provided as an `.obj` + `.png` combination and additionally converted to `.stl` for 3D printing.
 
 ## Branch 2: Low/Web Model (Maximum Performance)
 
@@ -68,27 +71,22 @@ Connected from `MeshFiltering_1`, optimized to prevent mobile browser crashes du
 | bumpMapping | **false** | See Known Issues — must stay disabled |
 | displacementMapping | **false** | See Known Issues — must stay disabled |
 
-**Purpose**: Lightweight model for web viewers. The OBJ is converted to a single `.glb` file (binary glTF with embedded textures) by the Python script, typically achieving ~77% size reduction (e.g., 88 MB OBJ → 20 MB GLB).
+**Purpose**: Lightweight model for web viewers. The OBJ is converted to a single `.glb` file (binary glTF with embedded textures) by the Python script, typically achieving massive size reduction.
 
 ---
 
-# Python Script Role
+# Serverless Architecture & Python Script Role
 
-The Python script (`main.py`) is the orchestration layer that runs the pipeline headless (no GUI). It does not rely on Meshroom's visual interface.
+The Python script (`main.py`) acts as the orchestration layer for the serverless endpoint. It runs headless (no GUI) and is containerized via Docker.
 
 **Main tasks:**
 
-1. **Environment Setup**: Receives paths to the image dataset and the JSON template (`.mg`).
-
-2. **Pipeline Execution**: Launches `meshroom_batch` via CLI with a `TMPDIR`/`TEMP` redirect so the cache stays inside the output directory (portable across Windows and Docker/Linux).
-
-3. **Output Organization**: After Meshroom finishes, identifies both Texturing branches in the cache (by texture file extension: PNG = High, JPG = Low) and copies them into organized subfolders (`Texturing_1/`, `Texturing_2/`).
-
-4. **Post-Processing (High Branch)**: Loads the high-poly `.obj` and exports a watertight `.stl` for 3D printing using `trimesh`.
-
-5. **Post-Processing (Low Branch)**: Packs the low-poly `.obj` + `.mtl` + JPG textures into a single `.glb` (binary glTF) using `trimesh`. This embeds all textures into one compact binary file, ready for web deployment.
-
-6. **Cleanup** *(planned)*: Delete the massive `MeshroomCache` folder after a successful run to free storage.
+1. **Environment Setup & Download**: Fetches the input image dataset from a specified Cloudflare R2 bucket (`download_files.py`).
+2. **Pipeline Execution**: Prepares the `.mg` JSON template and launches `meshroom_batch` via CLI. It uses a `TMPDIR`/`TEMP` redirect so the cache stays inside the output directory (portable across Windows and Docker/Linux).
+3. **Output Organization**: Identifies both Texturing branches in the cache (by texture file extension: PNG = High, JPG = Low) and copies them into organized subfolders (`Texturing_1/`, `Texturing_2/`).
+4. **Post-Processing (High Branch)**: Uses `trimesh` to load the high-poly `.obj` and export a watertight `.stl` for 3D printing. The original `.obj` + `.png` are preserved.
+5. **Post-Processing (Low Branch)**: Uses `trimesh` to pack the low-poly `.obj` + `.mtl` + JPG textures into a single `.glb` binary file.
+6. **Upload & Cleanup**: Zips the final `Texturing_1/` assets, `printable_model.stl`, and `web_model.glb` into `output.zip`, uploads it back to Cloudflare R2 (`upload_files.py`), and cleans up intermediate files.
 
 ---
 

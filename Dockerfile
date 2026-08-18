@@ -1,3 +1,4 @@
+# docker build -t meshroom_pipeline .
 # docker run --gpus all --env-file .env -it -v "D:\Docker_Meshroom:/runpod-volume" meshroom_pipeline
 
 FROM nvidia/cuda:12.9.2-runtime-ubuntu24.04
