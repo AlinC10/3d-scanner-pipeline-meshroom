@@ -4,8 +4,12 @@ output
 output.zip
 dataset_test/input_images
 dataset_monstree-master
+input_images
+dataset_test
 
 test.py
+simulation.py
+delete.py
 
 .venv
 __pycache__

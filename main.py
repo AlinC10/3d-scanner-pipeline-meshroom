@@ -3,24 +3,15 @@ import os
 import re
 import subprocess
 import shutil
-import sys
 import tempfile
 # pyrefly: ignore [missing-import]
 import trimesh
-import images
 # pyrefly: ignore [missing-import]
-import cloudflare_r2 as r2
-
-
+import download_files as down
+import upload_files as up
 
 # === CONSTANTS ===
-# MESHROOM_EXE="../runpod_volume/Meshroom-2025.1.0/meshroom_batch.exe"
-MESHROOM_EXE="D:/Meshroom-2025.1.0/meshroom_batch.exe"
-
-# OUTPUT_DIR="./runpod_volume/output"
-OUTPUT_DIR="./dataset_test/output"
-
-TEMPLATE_MG="./template.mg"
+from config import MESHROOM_EXE, OUTPUT_DIR, TEMPLATE_MG, INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET
 
 
 # === UTILITY FUNCTIONS ===
@@ -46,15 +37,6 @@ def prepare_pipeline(template_path, temp_mg_path):
 
     with open(temp_mg_path, "w", encoding="utf-8") as f:
         json.dump(pipeline_data, f, indent=4)
-
-    # Download Images from R2
-    print("Downloading images from R2...")
-    input_images_dir = images.get_file_path()
-    os.makedirs(input_images_dir, exist_ok=True)
-    for img in images_list:
-        r2.download_file(img, os.path.join(input_images_dir, img))
-
-    print(f"All images downloaded to {input_images_dir}")
 
     return texturing_nodes
 
@@ -220,7 +202,7 @@ def run_pipeline(output_dir, template_path):
     """
     if not os.path.exists(MESHROOM_EXE):
         print(f"[ERROR] Meshroom executable not found: {MESHROOM_EXE}")
-        return
+        raise Exception("Meshroom executable not found")
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -229,7 +211,7 @@ def run_pipeline(output_dir, template_path):
     cache_dir      = os.path.join(output_dir_abs, "MeshroomCache")
     # Fallback: default location where Meshroom writes when TMPDIR is not set
     sys_cache_dir  = os.path.join(tempfile.gettempdir(), "MeshroomCache")
-    input_images_abs_dir = images.get_file_path()
+    input_images_abs_dir = os.path.abspath(INPUT_IMAGES)
     
     print(f"\n{'='*55}")
     print(f"  MESHROOM PIPELINE - INITIALIZATION")
@@ -240,6 +222,11 @@ def run_pipeline(output_dir, template_path):
     # -- Step 1: Prepare template ----------------------------------------
     print(f"\n[1/4] Preparing pipeline template...")
     prepare_pipeline(template_path, temp_mg_path)
+
+
+    # Download Images from R2
+    down.download_every_img_from_bucket(INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET)
+
 
     # -- Step 2: Run Meshroom --------------------------------------------
     print(f"\n[2/4] Running Meshroom (this may take several minutes)...")
@@ -292,7 +279,7 @@ def run_pipeline(output_dir, template_path):
 
     except Exception as e:
         print(f"\n[FATAL ERROR - Meshroom]: {e}")
-        return
+        raise
     finally:
         if os.path.exists(temp_mg_path):
             os.remove(temp_mg_path)
@@ -363,31 +350,27 @@ def run_pipeline(output_dir, template_path):
     print(f"{'='*55}\n")
 
 
-images_list = []
-def simulate_send_images():
-    input_images_path = images.get_file_path()
+# images_list = []
+# def simulate_send_images():
+#     input_images_path = INPUT_IMAGES
 
-    print(f"Uploading images to R2...")
-    for img in os.listdir(input_images_path):
-        # upload every image to R2
-        print(f"  Uploading {img} to R2...")
-        img_path = os.path.join(input_images_path, img)
-        r2.upload_file(img_path)
-        images_list.append(img)
-        os.remove(img_path)
+#     print(f"Uploading images to R2...")
+#     for img in os.listdir(input_images_path):
+#         # upload every image to R2
+#         print(f"  Uploading {img} to R2...")
+#         img_path = os.path.join(input_images_path, img)
+#         up.upload_file(img_path)
+#         images_list.append(img)
+#         os.remove(img_path)
 
-    os.rmdir(input_images_path)
-    print("All images uploaded to R2")
+#     os.rmdir(input_images_path)
+#     print("All images uploaded to R2")
         
-def simulate_download_imges():
-    r2.download_generated_obj("output.zip", "./output")
+# def simulate_download_imges():
+#     down.download_generated_obj("output.zip", "./output")
 
 # === CONFIGURATION & ENTRY POINT ===
 if __name__ == "__main__":
-    # simulate_send_images()
-
     run_pipeline(OUTPUT_DIR, TEMPLATE_MG)
 
-    # r2.upload_generated_obj("./dataset_test/output")
-
-    # simulate_download_imges()
+    up.upload_generated_obj(OUTPUT_DIR)
