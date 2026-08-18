@@ -5,8 +5,11 @@ import subprocess
 import shutil
 import sys
 import tempfile
+# pyrefly: ignore [missing-import]
 import trimesh
 import images
+# pyrefly: ignore [missing-import]
+import cloudflare_r2 as r2
 
 
 
@@ -14,8 +17,8 @@ import images
 # MESHROOM_EXE="../runpod_volume/Meshroom-2025.1.0/meshroom_batch.exe"
 MESHROOM_EXE="D:/Meshroom-2025.1.0/meshroom_batch.exe"
 
-OUTPUT_DIR="./dataset_test/output"
 # OUTPUT_DIR="./runpod_volume/output"
+OUTPUT_DIR="./dataset_test/output"
 
 TEMPLATE_MG="./template.mg"
 
@@ -43,6 +46,15 @@ def prepare_pipeline(template_path, temp_mg_path):
 
     with open(temp_mg_path, "w", encoding="utf-8") as f:
         json.dump(pipeline_data, f, indent=4)
+
+    # Download Images from R2
+    print("Downloading images from R2...")
+    input_images_dir = images.get_file_path()
+    os.makedirs(input_images_dir, exist_ok=True)
+    for img in images_list:
+        r2.download_file(img, os.path.join(input_images_dir, img))
+
+    print(f"All images downloaded to {input_images_dir}")
 
     return texturing_nodes
 
@@ -351,6 +363,31 @@ def run_pipeline(output_dir, template_path):
     print(f"{'='*55}\n")
 
 
+images_list = []
+def simulate_send_images():
+    input_images_path = images.get_file_path()
+
+    print(f"Uploading images to R2...")
+    for img in os.listdir(input_images_path):
+        # upload every image to R2
+        print(f"  Uploading {img} to R2...")
+        img_path = os.path.join(input_images_path, img)
+        r2.upload_file(img_path)
+        images_list.append(img)
+        os.remove(img_path)
+
+    os.rmdir(input_images_path)
+    print("All images uploaded to R2")
+        
+def simulate_download_imges():
+    r2.download_generated_obj("output.zip", "./output")
+
 # === CONFIGURATION & ENTRY POINT ===
 if __name__ == "__main__":
+    # simulate_send_images()
+
     run_pipeline(OUTPUT_DIR, TEMPLATE_MG)
+
+    # r2.upload_generated_obj("./dataset_test/output")
+
+    # simulate_download_imges()

@@ -1,5 +1,11 @@
 dataset_test/output/*
 MeshroomCache
+output
+output.zip
+dataset_test/input_images
+dataset_monstree-master
+
+test.py
 
 .venv
 __pycache__
