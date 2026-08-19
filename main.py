@@ -1,9 +1,10 @@
-﻿import json
+import json
 import os
 import re
 import subprocess
 import shutil
 import tempfile
+import gc
 # pyrefly: ignore [missing-import]
 import trimesh
 # pyrefly: ignore [missing-import]
@@ -131,32 +132,27 @@ def convert_obj_to_stl(obj_path, stl_path):
         print(f"  [STL] Conversion error: {e}")
 
 
-def convert_obj_to_glb(obj_folder, glb_path):
+def convert_obj_to_glb(obj_folder, glb_path, compress_textures=False):
     """
     Packs an OBJ + MTL + texture images into a single GLB (binary glTF).
-
-    GLB stores geometry as compact binary buffers and embeds textures,
-    resulting in a dramatically smaller file compared to text-based OBJ.
-    Typical compression: 90 MB OBJ -> 5-8 MB GLB.
+    If compress_textures is True, converts any textures to JPGs in memory 
+    before packing to save massive amounts of space.
     """
+    import io
+    # pyrefly: ignore [missing-import]
+    from PIL import Image
+
     obj_path = os.path.join(obj_folder, "texturedMesh.obj")
     if not os.path.exists(obj_path):
         print(f"  [GLB] ERROR: OBJ not found: {obj_path}")
         return
 
     try:
-        print(f"\n  [GLB] Converting OBJ -> GLB...")
+        print(f"\n  [GLB] Converting OBJ -> GLB (compress_textures={compress_textures})...")
         print(f"        Source: {obj_folder}")
 
-        # IMPORTANT: force='scene' is required so trimesh always returns a Scene
-        # object that preserves multi-material / texture references.
-        # Without it, trimesh may collapse a single-mesh OBJ into a bare Trimesh,
-        # silently dropping the MTL material and all texture data → untextured GLB.
-        # process=False prevents trimesh from merging/simplifying geometry in ways
-        # that strip material assignments before export.
         scene = trimesh.load(obj_path, process=False, force="scene")
 
-        # Diagnostic: warn if no materials were loaded (textures will be missing)
         if hasattr(scene, "geometry"):
             has_materials = any(
                 getattr(geom, "visual", None) is not None
@@ -166,10 +162,38 @@ def convert_obj_to_glb(obj_folder, glb_path):
             )
             if not has_materials:
                 print("  [GLB] WARNING: No materials detected after load — "
-                      "check that the .mtl file and JPG textures are present "
+                      "check that the .mtl file and textures are present "
                       "in the same folder as the OBJ.")
 
-        # Export as binary glTF (.glb) — embeds geometry + textures in one file
+            if compress_textures:
+                for geom in scene.geometry.values():
+                    if hasattr(geom.visual, "material"):
+                        mat = geom.visual.material
+                        
+                        # For OBJ, trimesh uses SimpleMaterial which uses the 'image' attribute
+                        if hasattr(mat, 'image') and mat.image is not None:
+                            img = mat.image
+                            if img.mode != 'RGB':
+                                img = img.convert('RGB')
+                            
+                            buffer = io.BytesIO()
+                            img.save(buffer, format="JPEG", quality=85)
+                            buffer.seek(0)
+                            mat.image = Image.open(buffer)
+                            mat.image._meshroom_buffer = buffer # Keep buffer alive!
+                            
+                        # Also check for baseColorTexture (PBRMaterial format) just in case
+                        if hasattr(mat, 'baseColorTexture') and mat.baseColorTexture is not None:
+                            img = mat.baseColorTexture
+                            if img.mode != 'RGB':
+                                img = img.convert('RGB')
+                            buffer = io.BytesIO()
+                            img.save(buffer, format="JPEG", quality=85)
+                            buffer.seek(0)
+                            mat.baseColorTexture = Image.open(buffer)
+                            mat.baseColorTexture._meshroom_buffer = buffer # Keep buffer alive!
+
+        # Export as binary glTF (.glb)
         with open(glb_path, "wb") as f:
             f.write(scene.export(file_type="glb"))
 
@@ -183,6 +207,7 @@ def convert_obj_to_glb(obj_folder, glb_path):
 
     except Exception as e:
         print(f"  [GLB] Conversion error: {e}")
+
 
 
 # === MAIN PIPELINE ===
@@ -312,16 +337,28 @@ def run_pipeline(output_dir, template_path):
 
     # -- Step 4: Post-processing -----------------------------------------
     print(f"\n[4/4] Post-processing...")
+    gc.collect()
 
-    # High -> STL for 3D printing
+    # High -> STL & GLB
     if obj_high:
-        stl_path = os.path.join(output_dir_abs, "printable_model.stl")
-        convert_obj_to_stl(obj_high, stl_path)
+        high_stl_path = os.path.join(output_dir_abs, "high_model.stl")
+        convert_obj_to_stl(obj_high, high_stl_path)
+        gc.collect()
+        
+        # High -> GLB for viewing with compressed JPGs
+        high_glb_path = os.path.join(output_dir_abs, "high_model.glb")
+        convert_obj_to_glb(dest_high, high_glb_path, compress_textures=True)
+        gc.collect()
 
-    # Low -> GLB for web (compact binary with embedded textures)
+    # Low -> STL & GLB
     if obj_low:
-        glb_path = os.path.join(output_dir_abs, "web_model.glb")
-        convert_obj_to_glb(dest_low, glb_path)
+        low_stl_path = os.path.join(output_dir_abs, "low_model.stl")
+        convert_obj_to_stl(obj_low, low_stl_path)
+        gc.collect()
+
+        glb_path = os.path.join(output_dir_abs, "low_model.glb")
+        convert_obj_to_glb(dest_low, glb_path, compress_textures=False)
+        gc.collect()
 
     # -- Summary report --------------------------------------------------
     print(f"\n{'='*55}")
@@ -340,7 +377,7 @@ def run_pipeline(output_dir, template_path):
             print(f"\n  {subfolder}/ -> EMPTY or not found")
 
     # Show generated derivative files
-    for fname in ["printable_model.stl", "web_model.glb"]:
+    for fname in ["high_model.stl", "low_model.stl", "high_model.glb", "low_model.glb"]:
         fpath = os.path.join(output_dir_abs, fname)
         if os.path.exists(fpath):
             size_mb = os.path.getsize(fpath) / (1024 * 1024)
@@ -349,25 +386,6 @@ def run_pipeline(output_dir, template_path):
     print(f"\n  All files in: {output_dir_abs}")
     print(f"{'='*55}\n")
 
-
-# images_list = []
-# def simulate_send_images():
-#     input_images_path = INPUT_IMAGES
-
-#     print(f"Uploading images to R2...")
-#     for img in os.listdir(input_images_path):
-#         # upload every image to R2
-#         print(f"  Uploading {img} to R2...")
-#         img_path = os.path.join(input_images_path, img)
-#         up.upload_file(img_path)
-#         images_list.append(img)
-#         os.remove(img_path)
-
-#     os.rmdir(input_images_path)
-#     print("All images uploaded to R2")
-        
-# def simulate_download_imges():
-#     down.download_generated_obj("output.zip", "./output")
 
 # === CONFIGURATION & ENTRY POINT ===
 if __name__ == "__main__":

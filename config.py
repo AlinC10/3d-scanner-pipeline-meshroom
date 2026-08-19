@@ -15,6 +15,7 @@ OUTPUT_DIR="./output"
 TEMPLATE_MG="./template.mg"
 
 # Cloudflare R2 connection
+
 s3 = boto3.client(
     service_name="s3",
     endpoint_url=os.environ.get("R2_ENDPOINT_URL"),

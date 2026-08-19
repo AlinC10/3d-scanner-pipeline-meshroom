@@ -3,6 +3,7 @@ MeshroomCache
 output.zip
 output
 dataset_test/input_images
+input_images
 
 test.py
 

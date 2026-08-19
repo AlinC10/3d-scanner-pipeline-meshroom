@@ -49,9 +49,12 @@ def download_generated_obj(object_name: str = "output.zip", dest_dir: str=None, 
     Downloads the output ZIP from R2 and extracts it into dest_dir.
 
     Resulting layout after extraction:
-        dest_dir/high_texture/   <- OBJ + PNG textures
-        dest_dir/low_texture/    <- web_model.glb
-        dest_dir/printable_model.stl
+        dest_dir/obj/high/       <- OBJ + PNG textures
+        dest_dir/obj/low/        <- OBJ + JPG textures
+        dest_dir/glb/high_model.glb
+        dest_dir/glb/low_model.glb
+        dest_dir/stl/high_model.stl
+        dest_dir/stl/low_model.stl
 
     :param object_name: R2 key of the zip file (e.g. "output.zip").
     :param dest_dir:    Local directory where the zip is extracted.

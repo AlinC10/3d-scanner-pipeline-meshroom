@@ -31,7 +31,7 @@ def delete_all_files():
 if __name__ == "__main__":
     print("Starting the simulation...")
 
-    send_images()
+    # send_images()
     # Run a Docker command
     print("Run Docker Container...")
     result = subprocess.run(
