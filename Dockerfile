@@ -12,4 +12,4 @@ RUN python3 -m venv /app/.venv
 RUN /app/.venv/bin/pip install --upgrade pip && \
     /app/.venv/bin/pip install -r requirements.txt
 
-CMD ["/app/.venv/bin/python", "main.py"]
+CMD ["/app/.venv/bin/python", "-u", "handler.py"]

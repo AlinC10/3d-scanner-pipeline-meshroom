@@ -6,11 +6,11 @@ dataset_test/input_images
 input_images
 
 test.py
+convert_img.py
 
 .venv
 __pycache__
 *.pyc
-Dockerfile
 
 .vscode
 .idea
@@ -19,8 +19,5 @@ Dockerfile
 .env.example
 
 .aiignore
-.gitignore
 
-README.md
 AGENTS.md   
-TODOS.md   

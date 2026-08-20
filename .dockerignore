@@ -6,10 +6,11 @@ dataset_test/input_images
 dataset_monstree-master
 input_images
 dataset_test
+template.copy.mg
 
 test.py
 simulation.py
-delete.py
+convert_img.py
 
 .venv
 __pycache__

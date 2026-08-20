@@ -5,11 +5,13 @@ import subprocess
 import shutil
 import tempfile
 import gc
-# pyrefly: ignore [missing-import]
 import trimesh
-# pyrefly: ignore [missing-import]
 import download_files as down
 import upload_files as up
+import delete as dlt
+import runpod
+import io
+from PIL import Image
 
 # === CONSTANTS ===
 from config import MESHROOM_EXE, OUTPUT_DIR, TEMPLATE_MG, INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET
@@ -138,9 +140,6 @@ def convert_obj_to_glb(obj_folder, glb_path, compress_textures=False):
     If compress_textures is True, converts any textures to JPGs in memory 
     before packing to save massive amounts of space.
     """
-    import io
-    # pyrefly: ignore [missing-import]
-    from PIL import Image
 
     obj_path = os.path.join(obj_folder, "texturedMesh.obj")
     if not os.path.exists(obj_path):
@@ -212,7 +211,7 @@ def convert_obj_to_glb(obj_folder, glb_path, compress_textures=False):
 
 # === MAIN PIPELINE ===
 
-def run_pipeline(output_dir, template_path):
+def run_pipeline(job):
     """
     Orchestrates the full Meshroom photogrammetry pipeline:
 
@@ -225,14 +224,19 @@ def run_pipeline(output_dir, template_path):
             - High branch -> STL for 3D printing
             - Low branch  -> GLB for web (single binary, embedded textures)
     """
+    runpod.serverless.progress_update(job, {
+        "status": "PIPELINE CONFIGURATION",
+        "progress": 0
+    })
+
     if not os.path.exists(MESHROOM_EXE):
         print(f"[ERROR] Meshroom executable not found: {MESHROOM_EXE}")
         raise Exception("Meshroom executable not found")
 
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    temp_mg_path   = os.path.join(output_dir, "pipeline_temp.mg")
-    output_dir_abs = os.path.abspath(output_dir)
+    temp_mg_path   = os.path.join(OUTPUT_DIR, "pipeline_temp.mg")
+    output_dir_abs = os.path.abspath(OUTPUT_DIR)
     cache_dir      = os.path.join(output_dir_abs, "MeshroomCache")
     # Fallback: default location where Meshroom writes when TMPDIR is not set
     sys_cache_dir  = os.path.join(tempfile.gettempdir(), "MeshroomCache")
@@ -246,15 +250,25 @@ def run_pipeline(output_dir, template_path):
 
     # -- Step 1: Prepare template ----------------------------------------
     print(f"\n[1/4] Preparing pipeline template...")
-    prepare_pipeline(template_path, temp_mg_path)
+    prepare_pipeline(TEMPLATE_MG, temp_mg_path)
 
 
     # Download Images from R2
+    runpod.serverless.progress_update(job, {
+        "status": "Downloading images...",
+        "progress": 20
+    })
     down.download_every_img_from_bucket(INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET)
 
 
     # -- Step 2: Run Meshroom --------------------------------------------
     print(f"\n[2/4] Running Meshroom (this may take several minutes)...")
+
+    runpod.serverless.progress_update(job, {
+        "status": "Running Meshroom (this may take several minutes)...",
+        "progress": 40
+    })
+    
     command = [
         MESHROOM_EXE,
         "--pipeline", temp_mg_path,
@@ -312,6 +326,11 @@ def run_pipeline(output_dir, template_path):
     # -- Step 3: Organize outputs ----------------------------------------
     print(f"\n[3/4] Organizing output files...")
 
+    runpod.serverless.progress_update(job, {
+        "status": "Organizing output files...",
+        "progress": 60
+    })
+
     texturing_cache = {"high": None, "low": None}
     for loc in [cache_dir, sys_cache_dir]:
         found = find_texturing_cache_folders(loc)
@@ -337,6 +356,11 @@ def run_pipeline(output_dir, template_path):
 
     # -- Step 4: Post-processing -----------------------------------------
     print(f"\n[4/4] Post-processing...")
+    runpod.serverless.progress_update(job, {
+        "status": "Post-processing...",
+        "progress": 80
+    })
+
     gc.collect()
 
     # High -> STL & GLB
@@ -386,9 +410,22 @@ def run_pipeline(output_dir, template_path):
     print(f"\n  All files in: {output_dir_abs}")
     print(f"{'='*55}\n")
 
+    runpod.serverless.progress_update(job, {
+        "status": "Upload generated files from server...",
+        "progress": 100
+    })
+
+    up.upload_generated_obj(OUTPUT_DIR)
+    
+    dlt.delete_all_files_from_bucket()
+
+    return {
+        "status": "success"
+    }
+
 
 # === CONFIGURATION & ENTRY POINT ===
 if __name__ == "__main__":
-    run_pipeline(OUTPUT_DIR, TEMPLATE_MG)
-
-    up.upload_generated_obj(OUTPUT_DIR)
+    # testing only (fake job)
+    dummy_job = {"id": "test_local", "input": {}}
+    run_pipeline(dummy_job)
