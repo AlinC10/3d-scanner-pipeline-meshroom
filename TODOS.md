@@ -1,4 +1,19 @@
-# How it should work & Setup
+## 1. File & Metadata Processing (Pre-Meshroom)
+*   [ ] **EXIF Modification (Python Script):** Write a Python script to modify the `Camera Model` metadata field (e.g., from "IMX477" to "IMX477_Cam2") exclusively for Camera 2's photos. This forces Meshroom to calculate distinct lens profiles for the slight focus differences.
+*   [ ] **File name synchronization:** Ensure that photos taken at the exact same moment (same turntable angle) have identical names for both cameras (e.g., both should be named `0001.jpg`).
+*   [ ] **Rig folder structure setup:** Arrange the images into the required folder hierarchy to "lock" the 30° angle between the cameras. Documentation: [Multi-Camera Rig Meshroom](https://meshroom-manual.readthedocs.io/en/latest/faq/multi-camera-rig/multi-camera-rig.html)
+    *   Parent folder `rig/`
+    *   Sub-folder `rig/0/` -> contains Camera 1 images
+    *   Sub-folder `rig/1/` -> contains Camera 2 images (with the modified metadata)
+
+## 2. Meshroom Pipeline Update (v2025.1)
+*   [ ] **New project setup:** Create a new project and exclusively use the **Turntable Object Reconstruction** template (to utilize the AI-based background removal).
+*   [ ] **Migrate final nodes:** Copy your custom final nodes (Meshing, Filtering, Texturing - the branches for the 2 objects) from the old *Default Photogrammetry* project.
+*   [ ] **Connect to the new pipeline:** Paste the copied nodes into the new Turntable project. Delete the default final nodes from the new template that you do not need, and reconnect your custom ones to the main flow (usually to *StructureFromMotion* or *DepthMap*). Import the `rig/` folder to begin processing
+
+
+
+## How it should work & Setup
 
 * Buy a Network Volume from Runpod which will hold Meshroom. For Meshroom installation:
     * Rent a GPU Pod
