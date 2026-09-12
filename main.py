@@ -6,15 +6,13 @@ import shutil
 import tempfile
 import gc
 import trimesh
-import download_files as down
-import upload_files as up
-import delete as dlt
 import runpod
 import io
 from PIL import Image
-
+import clouddlare_r2 as r2
 # === CONSTANTS ===
-from config import MESHROOM_EXE, OUTPUT_DIR, TEMPLATE_MG, INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET
+from clouddlare_r2 import OUTPUT_DIR, INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET
+from config import MESHROOM_EXE, TEMPLATE_MG
 
 
 # === UTILITY FUNCTIONS ===
@@ -254,11 +252,12 @@ def run_pipeline(job):
 
 
     # Download Images from R2
-    runpod.serverless.progress_update(job, {
-        "status": "Downloading images...",
-        "progress": 20
-    })
-    down.download_every_img_from_bucket(INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET)
+    if not MESHROOM_EXE.startswith("D:"):
+        runpod.serverless.progress_update(job, {
+            "status": "Downloading images...",
+            "progress": 20
+        })
+        r2.download_every_img_from_bucket(INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET)
 
 
     # -- Step 2: Run Meshroom --------------------------------------------
@@ -410,14 +409,15 @@ def run_pipeline(job):
     print(f"\n  All files in: {output_dir_abs}")
     print(f"{'='*55}\n")
 
-    runpod.serverless.progress_update(job, {
-        "status": "Upload generated files from server...",
-        "progress": 100
-    })
+    if not MESHROOM_EXE.startswith("D:"):
+        runpod.serverless.progress_update(job, {
+            "status": "Upload generated files from server...",
+            "progress": 100
+        })
 
-    up.upload_generated_obj(OUTPUT_DIR)
+        r2.upload_generated_obj(OUTPUT_DIR)
     
-    dlt.delete_all_files_from_bucket()
+        r2.delete_all_files_from_bucket()
 
     return {
         "status": "success"

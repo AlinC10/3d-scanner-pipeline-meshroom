@@ -8,7 +8,9 @@
             "DepthMapFilter": "4.0",
             "FeatureExtraction": "1.3",
             "FeatureMatching": "2.0",
+            "ImageDetectionPrompt": "0.1",
             "ImageMatching": "2.0",
+            "ImageSegmentationBox": "0.2",
             "MeshDecimate": "1.0",
             "MeshFiltering": "3.0",
             "Meshing": "7.0",
@@ -59,7 +61,7 @@
         "DepthMapFilter_1": {
             "nodeType": "DepthMapFilter",
             "position": [
-                1400,
+                1800,
                 0
             ],
             "parallelization": {
@@ -67,7 +69,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "7aa78dd516c9eb4ed3e9f25c4ff7db7845959c8c",
+            "uid": "23885c4ca64243aafac2a0fdb66e66207e2cfb20",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{DepthMap_1.input}",
@@ -99,7 +101,7 @@
         "DepthMap_1": {
             "nodeType": "DepthMap",
             "position": [
-                1200,
+                1600,
                 0
             ],
             "parallelization": {
@@ -107,7 +109,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "7ba0865477a44a495d572701032164d2ba52f17a",
+            "uid": "f44f79db19b0bae5024876e1c0b1516f2fa32782",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{PrepareDenseScene_1.input}",
@@ -197,7 +199,7 @@
         "FeatureExtraction_1": {
             "nodeType": "FeatureExtraction",
             "position": [
-                200,
+                600,
                 0
             ],
             "parallelization": {
@@ -205,11 +207,11 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "77246c6df3bf282e2a9cfae3eb79449780fe3b87",
+            "uid": "4676d1360cdb4548457e484e9f101c71a97a74ab",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
-                "input": "{CameraInit_1.output}",
-                "masksFolder": "",
+                "input": "{ImageSegmentationBox_1.input}",
+                "masksFolder": "{ImageSegmentationBox_1.output}",
                 "maskExtension": "png",
                 "maskInvert": false,
                 "describerTypes": [
@@ -222,7 +224,7 @@
                 "relativePeakThreshold": 0.01,
                 "gridFiltering": true,
                 "workingColorSpace": "sRGB",
-                "forceCpuExtraction": false,
+                "forceCpuExtraction": true,
                 "maxThreads": 0,
                 "verboseLevel": "info"
             },
@@ -239,7 +241,7 @@
         "FeatureMatching_1": {
             "nodeType": "FeatureMatching",
             "position": [
-                600,
+                1000,
                 0
             ],
             "parallelization": {
@@ -247,7 +249,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "1fda1b3026d779179ac296f56e9b1f25dd5ee7d8",
+            "uid": "4fb6e3e3c0253ba828c005e10adeefb2b5ed6ae5",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageMatching_1.input}",
@@ -280,10 +282,50 @@
                 "output": "{nodeCacheFolder}"
             }
         },
+        "ImageDetectionPrompt_1": {
+            "nodeType": "ImageDetectionPrompt",
+            "position": [
+                200,
+                0
+            ],
+            "parallelization": {
+                "blockSize": 50,
+                "size": 0,
+                "split": 0
+            },
+            "uid": "8050a690be841177b8caa716f522fefb7901993b",
+            "internalFolder": "{cache}/{nodeType}/{uid}",
+            "inputs": {
+                "input": "{CameraInit_1.output}",
+                "recognitionModelPath": "${RDS_RECOGNITION_MODEL_PATH}",
+                "detectionModelPath": "${RDS_DETECTION_MODEL_PATH}",
+                "detectionConfigPath": "${RDS_DETECTION_CONFIG_PATH}",
+                "prompt": "main",
+                "synonyms": "",
+                "forceDetection": true,
+                "thresholdDetection": 0.2,
+                "bboxMargin": 0,
+                "useGpu": true,
+                "outputBboxImage": false,
+                "keepFilename": false,
+                "extension": "jpg",
+                "verboseLevel": "info"
+            },
+            "internalInputs": {
+                "invalidation": "",
+                "comment": "",
+                "label": "",
+                "color": "#575963"
+            },
+            "outputs": {
+                "output": "{nodeCacheFolder}",
+                "bboxes": "{nodeCacheFolder}/<VIEW_ID>.jpg"
+            }
+        },
         "ImageMatching_1": {
             "nodeType": "ImageMatching",
             "position": [
-                400,
+                800,
                 0
             ],
             "parallelization": {
@@ -291,7 +333,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "59cb6c8ba52d3c57656f680752c3bf120f8c2424",
+            "uid": "e9cdfb4b39aaef0a604ad80dda169030da7da4ce",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{FeatureExtraction_1.input}",
@@ -317,18 +359,55 @@
                 "output": "{nodeCacheFolder}/imageMatches.txt"
             }
         },
+        "ImageSegmentationBox_1": {
+            "nodeType": "ImageSegmentationBox",
+            "position": [
+                400,
+                0
+            ],
+            "parallelization": {
+                "blockSize": 50,
+                "size": 0,
+                "split": 0
+            },
+            "uid": "b01a1682cdea976169b3586a837bf6e068a07e02",
+            "internalFolder": "{cache}/{nodeType}/{uid}",
+            "inputs": {
+                "input": "{ImageDetectionPrompt_1.input}",
+                "bboxFolder": "{ImageDetectionPrompt_1.output}",
+                "nukeTracker": "",
+                "segmentationModelPath": "${RDS_SEGMENTATION_MODEL_PATH}",
+                "maskInvert": false,
+                "useGpu": true,
+                "keepFilename": true,
+                "extension": "png",
+                "outputBboxImage": false,
+                "verboseLevel": "info"
+            },
+            "internalInputs": {
+                "invalidation": "",
+                "comment": "",
+                "label": "",
+                "color": "#575963"
+            },
+            "outputs": {
+                "output": "{nodeCacheFolder}",
+                "masks": "{nodeCacheFolder}/<FILESTEM>.png",
+                "bboxes": "{nodeCacheFolder}/bboxes_<FILESTEM>.jpg"
+            }
+        },
         "MeshDecimate_1": {
             "nodeType": "MeshDecimate",
             "position": [
-                2002.0,
-                223.5
+                2311.0,
+                324.75
             ],
             "parallelization": {
                 "blockSize": 0,
                 "size": 1,
                 "split": 1
             },
-            "uid": "59c4f549cefb1e75eef729748178274686f9ccbe",
+            "uid": "7af681da37802ea3c9e315a00b5e77e1f01c2ebb",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{MeshFiltering_1.outputMesh}",
@@ -352,15 +431,15 @@
         "MeshFiltering_1": {
             "nodeType": "MeshFiltering",
             "position": [
-                1800,
-                0
+                2202.0,
+                4.0
             ],
             "parallelization": {
                 "blockSize": 0,
                 "size": 1,
                 "split": 1
             },
-            "uid": "bbe7546f797f6ada09b145c106de2e7bde2c3265",
+            "uid": "4fc6c7ed98f801b956adb2c4b9c0cc50e0569c87",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "inputMesh": "{Meshing_1.outputMesh}",
@@ -389,15 +468,15 @@
         "MeshFiltering_2": {
             "nodeType": "MeshFiltering",
             "position": [
-                2207,
-                284
+                2516.0,
+                385.25
             ],
             "parallelization": {
                 "blockSize": 0,
                 "size": 1,
                 "split": 1
             },
-            "uid": "2c4811d828d31fe2bbff7965dce20998a2873512",
+            "uid": "647a4d1cb9e50c624b0d55ff81f8b1c08a0821d7",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "inputMesh": "{MeshDecimate_1.output}",
@@ -426,7 +505,7 @@
         "Meshing_1": {
             "nodeType": "Meshing",
             "position": [
-                1600,
+                2000,
                 0
             ],
             "parallelization": {
@@ -434,7 +513,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "45d451ac25511df1ccb5112af7b28f1dc87a3f9e",
+            "uid": "2b8e92a211acfb90f7917f81ba93057096f76f36",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{DepthMapFilter_1.input}",
@@ -464,7 +543,7 @@
                 "maxInputPoints": 50000000,
                 "maxPoints": 5000000,
                 "maxPointsPerVoxel": 1000000,
-                "minStep": 3,
+                "minStep": 2,
                 "partitioning": "singleBlock",
                 "repartition": "multiResolution",
                 "angleFactor": 15.0,
@@ -514,7 +593,7 @@
         "PrepareDenseScene_1": {
             "nodeType": "PrepareDenseScene",
             "position": [
-                1000,
+                1400,
                 0
             ],
             "parallelization": {
@@ -522,12 +601,14 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "20098657753289e870cc6dcacb4486c841445c83",
+            "uid": "179f6f78961537efacf84832dc492f8b7f7470aa",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{StructureFromMotion_1.output}",
                 "imagesFolders": [],
-                "masksFolders": [],
+                "masksFolders": [
+                    "{ImageSegmentationBox_1.output}"
+                ],
                 "maskExtension": "png",
                 "outputFileType": "exr",
                 "saveMetadata": true,
@@ -549,7 +630,7 @@
         "StructureFromMotion_1": {
             "nodeType": "StructureFromMotion",
             "position": [
-                800,
+                1200,
                 0
             ],
             "parallelization": {
@@ -557,7 +638,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "b27c4c98cd3ba059da462cf5cb0dd27f9afee573",
+            "uid": "546c0f2af60b2261e0faf864e32d5edfe7d8317f",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{FeatureMatching_1.input}",
@@ -614,7 +695,7 @@
         "Texturing_1": {
             "nodeType": "Texturing",
             "position": [
-                2000,
+                2400,
                 0
             ],
             "parallelization": {
@@ -622,7 +703,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "14e2003b4fe6d6d7bb415e838a67de7b53553258",
+            "uid": "3f177e9ffae4ac079e1d1ed8cbe7a2275d3dde89",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{Meshing_1.output}",
@@ -686,15 +767,15 @@
         "Texturing_2": {
             "nodeType": "Texturing",
             "position": [
-                2414.0,
-                173.5
+                2723.0,
+                274.75
             ],
             "parallelization": {
                 "blockSize": 0,
                 "size": 1,
                 "split": 1
             },
-            "uid": "3d2b39837973c05758c13ab2f4544ae4139e0758",
+            "uid": "33c832547288cc878b65d403083cf0697df163ee",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{Meshing_1.output}",

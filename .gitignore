@@ -16,7 +16,6 @@ __pycache__
 .idea
 
 .env
-.env.example
 
 .aiignore
 

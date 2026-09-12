@@ -7,9 +7,15 @@
     *   Sub-folder `rig/1/` -> contains Camera 2 images (with the modified metadata)
 
 ## 2. Meshroom Pipeline Update (v2025.1)
-*   [ ] **New project setup:** Create a new project and exclusively use the **Turntable Object Reconstruction** template (to utilize the AI-based background removal).
-*   [ ] **Migrate final nodes:** Copy your custom final nodes (Meshing, Filtering, Texturing - the branches for the 2 objects) from the old *Default Photogrammetry* project.
+*   [ ] **New project setup & template selection:** Create a new project by choosing between two dynamic pipeline options depending on your scanning needs:
+
+    * **Basic 360° Scan (template_turntable.mg):** Use this single-pass template for a standard 360° rotation on the platan without flipping the object. It utilizes built-in AI background removal and processes much faster.
+    * **Full 360° Scan (template_two_sides.mg):** Use this dual-pass template if the user chooses to flip the object at the end to capture the base. This pipeline takes double the time as it processes two separate sets of images and merges them using SfMMerge.
+*   [ ] **Folder Structure for Two Sides:** For the second pipeline (template_two_sides.mg), set up two distinct parent directories (rig1/ and rig2/), each containing the required synchronized subfolders (e.g., rig1/0/, rig1/1/ for the first position and rig2/0/, rig2/1/ for the flipped position).
+*   [x] **Migrate final nodes:** Copy your custom final nodes (Meshing, Filtering, Texturing - the branches for the 2 objects) from the old *Default Photogrammetry* project.
+*   [ ] **Convert to .stl and .3mf for 3D Printing**
 *   [ ] **Connect to the new pipeline:** Paste the copied nodes into the new Turntable project. Delete the default final nodes from the new template that you do not need, and reconnect your custom ones to the main flow (usually to *StructureFromMotion* or *DepthMap*). Import the `rig/` folder to begin processing
+
 
 
 
@@ -27,7 +33,7 @@
     * Upload the Docker Image
     * Mount the Network Volume to the GPU Serverless Endpoint
     * Run the Pipeline (Download Images from Cloudflare R2 -> Run Meshroom -> Upload to Cloudflare R2 -> Retrieve Result to Raspberry Pi)
-    * Return the results (texturing 1, .stl, .glb)
+    * Return the results (texturing 1, texturing 2, .stl, .glb, .3mf)
 
 * Docker Image:
     * FROM nvidia/cuda:13.3.1-runtime-ubuntu24.04
