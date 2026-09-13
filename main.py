@@ -8,8 +8,59 @@ import gc
 import trimesh
 import runpod
 import io
+import time
+import threading
+import psutil
+import atexit
 from PIL import Image
 import clouddlare_r2 as r2
+
+# Draco compression support (optional — graceful fallback if not installed)
+try:
+    import DracoPy
+    import struct
+    import numpy as np
+    from pygltflib import GLTF2
+    _DRACO_AVAILABLE = True
+except ImportError:
+    _DRACO_AVAILABLE = False
+
+def _monitor_memory():
+    global _highest_ram, _mem_running
+    _highest_ram = 0
+    _mem_running = True
+    seconds_passed = 0
+    
+    def print_final():
+        global _mem_running
+        _mem_running = False
+        print(f"\n[MEMORY] Final Highest RAM + Swap Consumed: {_highest_ram:.2f} MB\n")
+        
+    atexit.register(print_final)
+    
+    while _mem_running:
+        try:
+            vmem = psutil.virtual_memory()
+            smem = psutil.swap_memory()
+            current_mb = (vmem.used + smem.used) / (1024 * 1024)
+            
+            if current_mb > _highest_ram:
+                _highest_ram = current_mb
+                
+            seconds_passed += 1
+            
+            if seconds_passed % 10 == 0:
+                print(f"[MEMORY] Current RAM + Swap Used: {current_mb:.2f} MB")
+                
+            if seconds_passed % 60 == 0:
+                print(f"[MEMORY] Highest RAM + Swap Consumed so far: {_highest_ram:.2f} MB")
+                
+            time.sleep(1)
+        except Exception:
+            break
+
+_mem_thread = threading.Thread(target=_monitor_memory, daemon=True)
+_mem_thread.start()
 # === CONSTANTS ===
 from clouddlare_r2 import OUTPUT_DIR, INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET
 from config import MESHROOM_EXE, TEMPLATE_MG
@@ -132,11 +183,237 @@ def convert_obj_to_stl(obj_path, stl_path):
         print(f"  [STL] Conversion error: {e}")
 
 
-def convert_obj_to_glb(obj_folder, glb_path, compress_textures=False):
+def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quantization_bits=14):
+    """
+    Reads a GLB produced by trimesh and re-encodes all mesh primitive
+    geometry buffers using Draco compression (KHR_draco_mesh_compression).
+
+    Correctly strips the original raw geometry bufferViews from the binary
+    chunk and replaces them with compact Draco blobs. Non-geometry bufferViews
+    (images/textures) are preserved unchanged.
+
+    Returns True on success, False if compression was skipped/failed.
+    """
+    if not _DRACO_AVAILABLE:
+        print("  [DRACO] DracoPy / pygltflib not installed — skipping compression.")
+        return False
+
+    try:
+        import base64
+        from pygltflib import BufferView
+
+        gltf = GLTF2().load(glb_path)
+
+        # ── raw binary from GLB BIN chunk ────────────────────────────────
+        raw_bin = b""
+        if hasattr(gltf, "_glb_data") and gltf._glb_data:
+            raw_bin = gltf._glb_data
+        elif gltf.buffers and getattr(gltf.buffers[0], "uri", None):
+            uri = gltf.buffers[0].uri
+            if uri.startswith("data:"):
+                _, b64 = uri.split(",", 1)
+                raw_bin = base64.b64decode(b64)
+
+        # ── helpers ───────────────────────────────────────────────────────
+        def _bv_bytes(bv_idx):
+            bv  = gltf.bufferViews[bv_idx]
+            off = bv.byteOffset or 0
+            return raw_bin[off : off + bv.byteLength]
+
+        _COMPONENT = {5120: np.int8,   5121: np.uint8,  5122: np.int16,
+                      5123: np.uint16, 5125: np.uint32, 5126: np.float32}
+        _ELEM_SIZE = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4,
+                      "MAT2":   4, "MAT3": 9, "MAT4": 16}
+
+        def _acc_to_array(acc_idx):
+            acc   = gltf.accessors[acc_idx]
+            raw   = _bv_bytes(acc.bufferView)
+            dtype = _COMPONENT[acc.componentType]
+            n     = _ELEM_SIZE[acc.type]
+            off   = acc.byteOffset or 0
+            arr   = np.frombuffer(raw[off:], dtype=dtype).copy()
+            if n > 1:
+                arr = arr.reshape(-1, n)
+            return arr[:acc.count]
+
+        # ── Pass 1: read geometry data and tag geometry bufferViews ──────
+        geometry_bv_set = set()   # bufferView indices used by geometry
+        prim_records    = []      # (mesh_i, prim_i, pos, faces, nrm, tex)
+
+        for mi, mesh in enumerate(gltf.meshes):
+            for pi, prim in enumerate(mesh.primitives):
+                attrs = prim.attributes
+                if attrs.POSITION is None:
+                    continue
+
+                # POSITION
+                acc = gltf.accessors[attrs.POSITION]
+                if acc.bufferView is not None:
+                    geometry_bv_set.add(acc.bufferView)
+                pos = _acc_to_array(attrs.POSITION).astype(np.float32)
+
+                # INDICES
+                faces = None
+                if prim.indices is not None:
+                    acc = gltf.accessors[prim.indices]
+                    if acc.bufferView is not None:
+                        geometry_bv_set.add(acc.bufferView)
+                    faces = _acc_to_array(prim.indices).astype(np.uint32).flatten().reshape(-1, 3)
+
+                # NORMAL
+                nrm = None
+                if attrs.NORMAL is not None:
+                    acc = gltf.accessors[attrs.NORMAL]
+                    if acc.bufferView is not None:
+                        geometry_bv_set.add(acc.bufferView)
+                    nrm = _acc_to_array(attrs.NORMAL).astype(np.float32)
+
+                # TEXCOORD_0
+                tex = None
+                if attrs.TEXCOORD_0 is not None:
+                    acc = gltf.accessors[attrs.TEXCOORD_0]
+                    if acc.bufferView is not None:
+                        geometry_bv_set.add(acc.bufferView)
+                    tex = _acc_to_array(attrs.TEXCOORD_0).astype(np.float32)
+
+                prim_records.append((mi, pi, pos, faces, nrm, tex))
+
+        if not prim_records:
+            print("  [DRACO] No compressible primitives found — skipping.")
+            return False
+
+        # ── Pass 2: null out geometry accessor bufferViews ───────────────
+        # Per the KHR_draco_mesh_compression spec, geometry accessors must
+        # have bufferView=None; the actual data comes from the Draco blob.
+        for mi, pi, *_ in prim_records:
+            prim  = gltf.meshes[mi].primitives[pi]
+            attrs = prim.attributes
+            for acc_idx in [attrs.POSITION, attrs.NORMAL, attrs.TEXCOORD_0, prim.indices]:
+                if acc_idx is not None:
+                    gltf.accessors[acc_idx].bufferView = None
+                    gltf.accessors[acc_idx].byteOffset = 0
+
+        # ── Pass 3: encode each primitive with DracoPy ───────────────────
+        draco_records = []   # (mi, pi, draco_bytes)
+        for mi, pi, pos, faces, nrm, tex in prim_records:
+            kwargs = dict(
+                points              = pos,
+                faces               = faces,
+                quantization_bits   = quantization_bits,
+                compression_level   = compression_level,
+                quantization_range  = -1,
+                quantization_origin = None,
+                create_metadata     = False,
+                preserve_order      = False,
+            )
+            if nrm is not None:
+                kwargs["normals"] = nrm
+            if tex is not None:
+                kwargs["tex_coord"] = tex
+            draco_records.append((mi, pi, bytes(DracoPy.encode(**kwargs))))
+
+        # ── Pass 4: rebuild binary blob (drop geometry, keep images) ─────
+        def _align4(b: bytes) -> bytes:
+            rem = len(b) % 4
+            return b + b"\x00" * (4 - rem) if rem else b
+
+        kept_indices  = [i for i in range(len(gltf.bufferViews))
+                         if i not in geometry_bv_set]
+        old_to_new_bv = {}
+        new_bvs       = []
+        new_bin       = b""
+
+        for new_i, old_i in enumerate(kept_indices):
+            old_bv = gltf.bufferViews[old_i]
+            blob   = _bv_bytes(old_i)
+            old_to_new_bv[old_i] = new_i
+
+            nbv            = BufferView()
+            nbv.buffer     = 0
+            nbv.byteOffset = len(new_bin)
+            nbv.byteLength = old_bv.byteLength
+            if getattr(old_bv, "target", None):
+                nbv.target = old_bv.target
+            new_bvs.append(nbv)
+            new_bin += _align4(blob)
+
+        # Append Draco blobs
+        draco_bv_map = {}   # (mi, pi) -> new BV index
+        for mi, pi, draco_bytes in draco_records:
+            bv_idx               = len(new_bvs)
+            draco_bv_map[(mi, pi)] = bv_idx
+
+            nbv             = BufferView()
+            nbv.buffer      = 0
+            nbv.byteOffset  = len(new_bin)
+            nbv.byteLength  = len(draco_bytes)
+            new_bvs.append(nbv)
+            new_bin += _align4(draco_bytes)
+
+        # ── Pass 5: remap accessor & image bufferView indices ─────────────
+        for acc in gltf.accessors:
+            if acc.bufferView is not None:
+                acc.bufferView = old_to_new_bv.get(acc.bufferView, None)
+
+        for img in (gltf.images or []):
+            if getattr(img, "bufferView", None) is not None:
+                img.bufferView = old_to_new_bv.get(img.bufferView, None)
+
+        # ── Pass 6: attach Draco extension to each primitive ─────────────
+        for mi, pi, _ in draco_records:
+            prim  = gltf.meshes[mi].primitives[pi]
+            attrs = prim.attributes
+            attr_ids, counter = {}, 0
+            attr_ids["POSITION"] = counter; counter += 1
+            if attrs.NORMAL     is not None: attr_ids["NORMAL"]     = counter; counter += 1
+            if attrs.TEXCOORD_0 is not None: attr_ids["TEXCOORD_0"] = counter; counter += 1
+
+            if prim.extensions is None:
+                prim.extensions = {}
+            prim.extensions["KHR_draco_mesh_compression"] = {
+                "bufferView": draco_bv_map[(mi, pi)],
+                "attributes": attr_ids,
+            }
+
+        # ── Finalize & save ───────────────────────────────────────────────
+        gltf.bufferViews = new_bvs
+        gltf.buffers[0].byteLength = len(new_bin)
+
+        if gltf.extensionsUsed is None:
+            gltf.extensionsUsed = []
+        if "KHR_draco_mesh_compression" not in gltf.extensionsUsed:
+            gltf.extensionsUsed.append("KHR_draco_mesh_compression")
+        if gltf.extensionsRequired is None:
+            gltf.extensionsRequired = []
+        if "KHR_draco_mesh_compression" not in gltf.extensionsRequired:
+            gltf.extensionsRequired.append("KHR_draco_mesh_compression")
+
+        gltf._glb_data = new_bin
+        gltf.save_binary(draco_glb_path)
+
+        before_mb = os.path.getsize(glb_path)       / (1024 * 1024)
+        after_mb  = os.path.getsize(draco_glb_path) / (1024 * 1024)
+        ratio     = (1 - after_mb / before_mb) * 100 if before_mb > 0 else 0
+        print(f"  [DRACO] {before_mb:.1f} MB -> {after_mb:.1f} MB ({ratio:.0f}% smaller)")
+        return True
+
+    except Exception as e:
+        print(f"  [DRACO] Compression failed: {e}")
+        return False
+
+
+def convert_obj_to_glb(obj_folder, glb_path, compress_textures=True,
+                       draco=True, draco_level=7, draco_bits=14):
     """
     Packs an OBJ + MTL + texture images into a single GLB (binary glTF).
-    If compress_textures is True, converts any textures to JPGs in memory 
-    before packing to save massive amounts of space.
+
+    Stage 1 (trimesh): loads the OBJ, optionally re-encodes textures as JPG
+    in-memory, then writes a standard GLB.
+
+    Stage 2 (Draco, optional): if `draco=True` and DracoPy+pygltflib are
+    installed, re-encodes the mesh geometry buffers with Draco compression
+    (KHR_draco_mesh_compression), shrinking geometry by ~80-95%.
+    If Draco compression fails, the Stage 1 GLB is kept as-is.
     """
 
     obj_path = os.path.join(obj_folder, "texturedMesh.obj")
@@ -166,19 +443,19 @@ def convert_obj_to_glb(obj_folder, glb_path, compress_textures=False):
                 for geom in scene.geometry.values():
                     if hasattr(geom.visual, "material"):
                         mat = geom.visual.material
-                        
+
                         # For OBJ, trimesh uses SimpleMaterial which uses the 'image' attribute
                         if hasattr(mat, 'image') and mat.image is not None:
                             img = mat.image
                             if img.mode != 'RGB':
                                 img = img.convert('RGB')
-                            
+
                             buffer = io.BytesIO()
                             img.save(buffer, format="JPEG", quality=85)
                             buffer.seek(0)
                             mat.image = Image.open(buffer)
-                            mat.image._meshroom_buffer = buffer # Keep buffer alive!
-                            
+                            mat.image._meshroom_buffer = buffer  # Keep buffer alive!
+
                         # Also check for baseColorTexture (PBRMaterial format) just in case
                         if hasattr(mat, 'baseColorTexture') and mat.baseColorTexture is not None:
                             img = mat.baseColorTexture
@@ -188,19 +465,38 @@ def convert_obj_to_glb(obj_folder, glb_path, compress_textures=False):
                             img.save(buffer, format="JPEG", quality=85)
                             buffer.seek(0)
                             mat.baseColorTexture = Image.open(buffer)
-                            mat.baseColorTexture._meshroom_buffer = buffer # Keep buffer alive!
+                            mat.baseColorTexture._meshroom_buffer = buffer  # Keep buffer alive!
 
-        # Export as binary glTF (.glb)
+        # ── Stage 1: export standard GLB via trimesh ─────────────────────
         with open(glb_path, "wb") as f:
             f.write(scene.export(file_type="glb"))
 
-        size_mb = os.path.getsize(glb_path) / (1024 * 1024)
-        print(f"  [GLB] Saved: {glb_path} ({size_mb:.1f} MB)")
+        size_mb  = os.path.getsize(glb_path) / (1024 * 1024)
+        obj_size = os.path.getsize(obj_path)  / (1024 * 1024)
+        ratio    = (1 - size_mb / obj_size) * 100 if obj_size > 0 else 0
+        print(f"  [GLB] Stage 1 saved: {glb_path} ({size_mb:.1f} MB)")
+        print(f"  [GLB] {obj_size:.1f} MB OBJ -> {size_mb:.1f} MB GLB ({ratio:.0f}% smaller)")
 
-        # Show compression ratio vs source OBJ
-        obj_size = os.path.getsize(obj_path) / (1024 * 1024)
-        ratio = (1 - size_mb / obj_size) * 100 if obj_size > 0 else 0
-        print(f"  [GLB] Compression: {obj_size:.1f} MB OBJ -> {size_mb:.1f} MB GLB ({ratio:.0f}% smaller)")
+        # ── Stage 2: Draco geometry compression ──────────────────────────
+        if draco and _DRACO_AVAILABLE:
+            draco_path = glb_path.replace(".glb", "_draco.glb")
+            print(f"\n  [GLB] Stage 2: applying Draco compression "
+                  f"(level={draco_level}, bits={draco_bits})...")
+            success = _apply_draco_compression(
+                glb_path, draco_path,
+                compression_level=draco_level,
+                quantization_bits=draco_bits,
+            )
+            if success:
+                # Replace the plain GLB with the Draco-compressed version
+                os.replace(draco_path, glb_path)
+                final_mb = os.path.getsize(glb_path) / (1024 * 1024)
+                print(f"  [GLB] Final (Draco): {glb_path} ({final_mb:.1f} MB)")
+            else:
+                print("  [GLB] Draco stage skipped — keeping Stage 1 GLB.")
+        elif draco and not _DRACO_AVAILABLE:
+            print("  [GLB] Draco requested but DracoPy/pygltflib not installed "
+                  "— add them to requirements.txt. Keeping Stage 1 GLB.")
 
     except Exception as e:
         print(f"  [GLB] Conversion error: {e}")
@@ -370,7 +666,7 @@ def run_pipeline(job):
         
         # High -> GLB for viewing with compressed JPGs
         high_glb_path = os.path.join(output_dir_abs, "high_model.glb")
-        convert_obj_to_glb(dest_high, high_glb_path, compress_textures=True)
+        convert_obj_to_glb(dest_high, high_glb_path, compress_textures=True, draco=False)
         gc.collect()
 
     # Low -> STL & GLB
@@ -380,7 +676,7 @@ def run_pipeline(job):
         gc.collect()
 
         glb_path = os.path.join(output_dir_abs, "low_model.glb")
-        convert_obj_to_glb(dest_low, glb_path, compress_textures=False)
+        convert_obj_to_glb(dest_low, glb_path, compress_textures=True, draco=True, draco_level=10, draco_bits=12)
         gc.collect()
 
     # -- Summary report --------------------------------------------------
