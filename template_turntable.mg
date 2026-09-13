@@ -407,11 +407,11 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "7af681da37802ea3c9e315a00b5e77e1f01c2ebb",
+            "uid": "03021c413331bf72b40da64b16a51809f37cf057",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{MeshFiltering_1.outputMesh}",
-                "simplificationFactor": 0.2,
+                "simplificationFactor": 0.05,
                 "nbVertices": 0,
                 "minVertices": 0,
                 "maxVertices": 50000,
@@ -439,7 +439,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "4fc6c7ed98f801b956adb2c4b9c0cc50e0569c87",
+            "uid": "9fecfb1e35cf2f4a21f8dc0d29bb7690cef520d3",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "inputMesh": "{Meshing_1.outputMesh}",
@@ -476,7 +476,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "647a4d1cb9e50c624b0d55ff81f8b1c08a0821d7",
+            "uid": "67b3e08cb372b424ddeb8692605214df98b76053",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "inputMesh": "{MeshDecimate_1.output}",
@@ -488,7 +488,7 @@
                 "smoothingLambda": 1.0,
                 "filteringSubset": "all",
                 "filteringIterations": 1,
-                "filterLargeTrianglesFactor": 0.0,
+                "filterLargeTrianglesFactor": 30.0,
                 "filterTrianglesRatio": 0.0,
                 "verboseLevel": "info"
             },
@@ -703,7 +703,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "3f177e9ffae4ac079e1d1ed8cbe7a2275d3dde89",
+            "uid": "0551d2d39bdc2aa4b43e14e37c090c18466d07c1",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{Meshing_1.output}",
@@ -775,7 +775,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "33c832547288cc878b65d403083cf0697df163ee",
+            "uid": "5350fcaa39e3be0d41112b3a2fe1265bbc9a321e",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{Meshing_1.output}",

@@ -19,6 +19,8 @@ s3 = boto3.client(
 R2_PIPELINE_IMAGES_BUCKET="photogrammetry-pipeline"
 
 INPUT_IMAGES="./input_images"
+# Rig mode: images split into ./input_images/rig/0/ (Camera 1) and ./input_images/rig/1/ (Camera 2)
+RIG_IMAGES="./input_images/rig"
 
 OUTPUT_DIR="./output"
 
@@ -96,6 +98,8 @@ def create_output_zip(folder_path: str, zip_path: str) -> str:
       glb/low_model.glb
       stl/high_model.stl
       stl/low_model.stl
+      3mf/high_model.3mf
+      3mf/low_model.3mf
 
   :param folder_path: Absolute or relative path to the output directory.
   :param zip_path:    Destination path for the .zip file.
@@ -150,6 +154,20 @@ def create_output_zip(folder_path: str, zip_path: str) -> str:
       else:
           logging.warning("[ZIP] Low STL file not found: %s", low_stl_file)
 
+      # --- 3mf/high_model.3mf ---
+      high_3mf_file = os.path.join(folder_path, "high_model.3mf")
+      if os.path.isfile(high_3mf_file):
+          zipf.write(high_3mf_file, os.path.join("3mf", "high_model.3mf"))
+      else:
+          logging.warning("[ZIP] High 3MF file not found: %s", high_3mf_file)
+
+      # --- 3mf/low_model.3mf ---
+      low_3mf_file = os.path.join(folder_path, "low_model.3mf")
+      if os.path.isfile(low_3mf_file):
+          zipf.write(low_3mf_file, os.path.join("3mf", "low_model.3mf"))
+      else:
+          logging.warning("[ZIP] Low 3MF file not found: %s", low_3mf_file)
+
   return zip_path
 
 def upload_generated_obj(folder_path: str, object_name: str = "output.zip",
@@ -164,6 +182,8 @@ def upload_generated_obj(folder_path: str, object_name: str = "output.zip",
       glb/low_model.glb
       stl/high_model.stl
       stl/low_model.stl
+      3mf/high_model.3mf
+      3mf/low_model.3mf
 
   :param folder_path:  Relative or absolute path to the output directory.
   :param object_name:  Key used when storing the file in R2.
@@ -212,8 +232,33 @@ def download_file(object_name: str, file_name: str | None = None, bucket: str = 
       return False
   return True
 
-def download_every_img_from_bucket(local_dir: str = INPUT_IMAGES, bucket: str = R2_PIPELINE_IMAGES_BUCKET):
-  response = s3.list_objects_v2(Bucket=bucket)
+def download_every_img_from_bucket(local_dir: str = INPUT_IMAGES,
+                                   bucket: str = R2_PIPELINE_IMAGES_BUCKET,
+                                   rig_mode: bool = False):
+  """Download all images from the R2 bucket to a local directory.
+
+  Single mode (rig_mode=False):
+      Downloads all objects flat into `local_dir/`.
+      R2 keys: IMG_0001.jpg  →  local_dir/IMG_0001.jpg
+
+  Rig mode (rig_mode=True):
+      Downloads objects that start with 'rig/' and recreates the two-level
+      subfolder structure expected by Meshroom's multi-camera rig support.
+      R2 keys: rig/0/0001.jpg  →  local_dir/0/0001.jpg
+               rig/1/0001.jpg  →  local_dir/1/0001.jpg
+      Pass `local_dir=RIG_IMAGES` (i.e. './input_images/rig') so that
+      Meshroom receives the parent rig directory as --input.
+
+  :param local_dir: Local directory to download images into.
+  :param bucket: R2 bucket name.
+  :param rig_mode: If True, download rig-structured images preserving subfolders.
+  """
+  if rig_mode:
+      # List only objects under the 'rig/' prefix
+      response = s3.list_objects_v2(Bucket=bucket, Prefix="rig/")
+  else:
+      response = s3.list_objects_v2(Bucket=bucket)
+
   os.makedirs(local_dir, exist_ok=True)
 
   print("Downloading images from R2...")
@@ -221,9 +266,18 @@ def download_every_img_from_bucket(local_dir: str = INPUT_IMAGES, bucket: str = 
       for obj in response['Contents']:
           file_key = obj['Key']
 
-          print(f"Downloading {file_key}...")
+          if rig_mode:
+              # Strip the leading 'rig/' prefix so we get '0/0001.jpg' or '1/0001.jpg'
+              # then reconstruct the local path as local_dir/0/0001.jpg
+              relative_key = file_key[len("rig/"):]   # e.g. "0/0001.jpg"
+              local_path = os.path.join(local_dir, *relative_key.split("/"))
+          else:
+              local_path = os.path.join(local_dir, os.path.basename(file_key))
 
-          download_file(file_key, os.path.join(local_dir, os.path.basename(file_key)), bucket)
+          os.makedirs(os.path.dirname(local_path), exist_ok=True)
+          print(f"Downloading {file_key} -> {local_path}...")
+          download_file(file_key, local_path, bucket)
+
   print("Downloaded every image")
 
 def download_generated_obj(object_name: str = "output.zip", dest_dir: str | None = None,
@@ -238,6 +292,8 @@ def download_generated_obj(object_name: str = "output.zip", dest_dir: str | None
       dest_dir/glb/low_model.glb
       dest_dir/stl/high_model.stl
       dest_dir/stl/low_model.stl
+      dest_dir/3mf/high_model.3mf
+      dest_dir/3mf/low_model.3mf
 
   :param object_name: R2 key of the zip file (e.g. "output.zip").
   :param dest_dir:    Local directory where the zip is extracted.

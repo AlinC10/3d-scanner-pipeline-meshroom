@@ -1,10 +1,11 @@
 ## 1. File & Metadata Processing (Pre-Meshroom)
-*   [ ] **EXIF Modification (Python Script):** Write a Python script to modify the `Camera Model` metadata field (e.g., from "IMX477" to "IMX477_Cam2") exclusively for Camera 2's photos. This forces Meshroom to calculate distinct lens profiles for the slight focus differences.
-*   [ ] **File name synchronization:** Ensure that photos taken at the exact same moment (same turntable angle) have identical names for both cameras (e.g., both should be named `0001.jpg`).
-*   [ ] **Rig folder structure setup:** Arrange the images into the required folder hierarchy to "lock" the 30° angle between the cameras. Documentation: [Multi-Camera Rig Meshroom](https://meshroom-manual.readthedocs.io/en/latest/faq/multi-camera-rig/multi-camera-rig.html)
+*   [x] **EXIF Modification (Python Script):** Write a Python script to modify the `Camera Model` metadata field (e.g., from "IMX477" to "IMX477_Cam2") exclusively for Camera 2's photos. This forces Meshroom to calculate distinct lens profiles for the slight focus differences.
+*   [x] **File name synchronization:** Ensure that photos taken at the exact same moment (same turntable angle) have identical names for both cameras (e.g., both should be named `0001.jpg`).
+*   [x] **Rig folder structure setup:** Arrange the images into the required folder hierarchy to "lock" the 30° angle between the cameras. Documentation: [Multi-Camera Rig Meshroom](https://meshroom-manual.readthedocs.io/en/latest/faq/multi-camera-rig/multi-camera-rig.html)
     *   Parent folder `rig/`
     *   Sub-folder `rig/0/` -> contains Camera 1 images
     *   Sub-folder `rig/1/` -> contains Camera 2 images (with the modified metadata)
+    *   **Implementation:** Pass `{"input": {"mode": "rig"}}` in the RunPod job payload to activate. Default is `"single"` (flat `input_images/` folder). For local simulation use `send_rig_images()` from `simulation.py`.
 
 ## 2. Meshroom Pipeline Update (v2025.1)
 *   [ ] **New project setup & template selection:** Create a new project by choosing between two dynamic pipeline options depending on your scanning needs:
@@ -13,7 +14,7 @@
     * **Full 360° Scan (template_two_sides.mg):** Use this dual-pass template if the user chooses to flip the object at the end to capture the base. This pipeline takes double the time as it processes two separate sets of images and merges them using SfMMerge.
 *   [ ] **Folder Structure for Two Sides:** For the second pipeline (template_two_sides.mg), set up two distinct parent directories (rig1/ and rig2/), each containing the required synchronized subfolders (e.g., rig1/0/, rig1/1/ for the first position and rig2/0/, rig2/1/ for the flipped position).
 *   [x] **Migrate final nodes:** Copy your custom final nodes (Meshing, Filtering, Texturing - the branches for the 2 objects) from the old *Default Photogrammetry* project.
-*   [ ] **Convert to .stl and .3mf for 3D Printing**
+*   [x] **Convert to .stl and .3mf for 3D Printing**
 *   [ ] **Connect to the new pipeline:** Paste the copied nodes into the new Turntable project. Delete the default final nodes from the new template that you do not need, and reconnect your custom ones to the main flow (usually to *StructureFromMotion* or *DepthMap*). Import the `rig/` folder to begin processing
 
 

@@ -62,7 +62,7 @@ def _monitor_memory():
 _mem_thread = threading.Thread(target=_monitor_memory, daemon=True)
 _mem_thread.start()
 # === CONSTANTS ===
-from clouddlare_r2 import OUTPUT_DIR, INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET
+from clouddlare_r2 import OUTPUT_DIR, INPUT_IMAGES, RIG_IMAGES, R2_PIPELINE_IMAGES_BUCKET
 from config import MESHROOM_EXE, TEMPLATE_MG
 
 
@@ -169,18 +169,27 @@ def copy_texturing_output(cache_folder, dest_folder, label):
     return obj_dest
 
 
-def convert_obj_to_stl(obj_path, stl_path):
-    """Converts a high-poly OBJ mesh to a watertight STL for 3D printing."""
+def convert_obj_to_print_formats(obj_path, stl_path, mf_path):
+    """Converts a high-poly OBJ mesh to watertight STL and 3MF formats for 3D printing."""
     try:
-        print(f"\n  [STL] Processing geometry: {os.path.basename(obj_path)}...")
+        print(f"\n  [PRINT] Processing geometry: {os.path.basename(obj_path)}...")
         mesh = trimesh.load(obj_path, force="mesh")
         if not mesh.is_watertight:
+            print("  [PRINT] Filling holes to make mesh watertight...")
             trimesh.repair.fill_holes(mesh)
+        
+        # Export STL
         mesh.export(stl_path)
-        size_mb = os.path.getsize(stl_path) / (1024 * 1024)
-        print(f"  [STL] Saved: {stl_path} ({size_mb:.1f} MB)")
+        size_stl = os.path.getsize(stl_path) / (1024 * 1024)
+        print(f"  [STL] Saved: {stl_path} ({size_stl:.1f} MB)")
+        
+        # Export 3MF
+        mesh.export(mf_path)
+        size_mf = os.path.getsize(mf_path) / (1024 * 1024)
+        print(f"  [3MF] Saved: {mf_path} ({size_mf:.1f} MB)")
+        
     except Exception as e:
-        print(f"  [STL] Conversion error: {e}")
+        print(f"  [PRINT] Conversion error: {e}")
 
 
 def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quantization_bits=14):
@@ -534,11 +543,22 @@ def run_pipeline(job):
     cache_dir      = os.path.join(output_dir_abs, "MeshroomCache")
     # Fallback: default location where Meshroom writes when TMPDIR is not set
     sys_cache_dir  = os.path.join(tempfile.gettempdir(), "MeshroomCache")
-    input_images_abs_dir = os.path.abspath(INPUT_IMAGES)
-    
+    # -- Determine input mode -----------------------------------------------
+    # Accepted values: "single" (default, flat input_images/ folder)
+    #                  "rig"    (input_images/rig/0/ + input_images/rig/1/)
+    # When submitting a RunPod job, pass: {"input": {"mode": "rig"}} to activate rig mode.
+    mode = job.get("input", {}).get("mode", "single").strip().lower()
+    rig_mode = (mode == "rig")
+
+    if rig_mode:
+        input_images_abs_dir = os.path.abspath(RIG_IMAGES)
+    else:
+        input_images_abs_dir = os.path.abspath(INPUT_IMAGES)
+
     print(f"\n{'='*55}")
     print(f"  MESHROOM PIPELINE - INITIALIZATION")
     print(f"{'='*55}")
+    print(f"  Mode:         {'RIG (multi-camera)' if rig_mode else 'SINGLE (flat)'}")
     print(f"  Input images: {input_images_abs_dir}")
     print(f"  Output dir:   {output_dir_abs}")
 
@@ -553,7 +573,11 @@ def run_pipeline(job):
             "status": "Downloading images...",
             "progress": 20
         })
-        r2.download_every_img_from_bucket(INPUT_IMAGES, R2_PIPELINE_IMAGES_BUCKET)
+        r2.download_every_img_from_bucket(
+            local_dir = RIG_IMAGES if rig_mode else INPUT_IMAGES,
+            bucket    = R2_PIPELINE_IMAGES_BUCKET,
+            rig_mode  = rig_mode,
+        )
 
 
     # -- Step 2: Run Meshroom --------------------------------------------
@@ -658,10 +682,11 @@ def run_pipeline(job):
 
     gc.collect()
 
-    # High -> STL & GLB
+    # High -> STL, 3MF & GLB
     if obj_high:
         high_stl_path = os.path.join(output_dir_abs, "high_model.stl")
-        convert_obj_to_stl(obj_high, high_stl_path)
+        high_3mf_path = os.path.join(output_dir_abs, "high_model.3mf")
+        convert_obj_to_print_formats(obj_high, high_stl_path, high_3mf_path)
         gc.collect()
         
         # High -> GLB for viewing with compressed JPGs
@@ -669,10 +694,11 @@ def run_pipeline(job):
         convert_obj_to_glb(dest_high, high_glb_path, compress_textures=True, draco=False)
         gc.collect()
 
-    # Low -> STL & GLB
+    # Low -> STL, 3MF & GLB
     if obj_low:
         low_stl_path = os.path.join(output_dir_abs, "low_model.stl")
-        convert_obj_to_stl(obj_low, low_stl_path)
+        low_3mf_path = os.path.join(output_dir_abs, "low_model.3mf")
+        convert_obj_to_print_formats(obj_low, low_stl_path, low_3mf_path)
         gc.collect()
 
         glb_path = os.path.join(output_dir_abs, "low_model.glb")
@@ -696,7 +722,7 @@ def run_pipeline(job):
             print(f"\n  {subfolder}/ -> EMPTY or not found")
 
     # Show generated derivative files
-    for fname in ["high_model.stl", "low_model.stl", "high_model.glb", "low_model.glb"]:
+    for fname in ["high_model.stl", "low_model.stl", "high_model.3mf", "low_model.3mf", "high_model.glb", "low_model.glb"]:
         fpath = os.path.join(output_dir_abs, fname)
         if os.path.exists(fpath):
             size_mb = os.path.getsize(fpath) / (1024 * 1024)

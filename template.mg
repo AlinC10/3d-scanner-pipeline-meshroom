@@ -332,7 +332,7 @@
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{MeshFiltering_1.outputMesh}",
-                "simplificationFactor": 0.2,
+                "simplificationFactor": 0.05,
                 "nbVertices": 0,
                 "minVertices": 0,
                 "maxVertices": 50000,
@@ -409,7 +409,7 @@
                 "smoothingLambda": 1.0,
                 "filteringSubset": "all",
                 "filteringIterations": 1,
-                "filterLargeTrianglesFactor": 0.0,
+                "filterLargeTrianglesFactor": 30.0,
                 "filterTrianglesRatio": 0.0,
                 "verboseLevel": "info"
             },
@@ -650,7 +650,7 @@
                 "unwrapMethod": "Basic",
                 "useUDIM": false,
                 "fillHoles": false,
-                "padding": 5,
+                "padding": 2,
                 "multiBandDownscale": 4,
                 "multiBandNbContrib": {
                     "high": 1,
@@ -739,7 +739,7 @@
                 "forceVisibleByAllVertices": false,
                 "flipNormals": false,
                 "visibilityRemappingMethod": "PullPush",
-                "subdivisionTargetRatio": 0.8,
+                "subdivisionTargetRatio": 0.0,
                 "verboseLevel": "info"
             },
             "internalInputs": {

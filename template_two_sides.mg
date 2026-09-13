@@ -1070,7 +1070,7 @@
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{MeshFiltering_3.outputMesh}",
-                "simplificationFactor": 0.2,
+                "simplificationFactor": 0.0,
                 "nbVertices": 0,
                 "minVertices": 0,
                 "maxVertices": 50000,

@@ -71,7 +71,7 @@ Connected from `MeshFiltering_1`, optimized to prevent mobile browser crashes du
 | bumpMapping | **false** | See Known Issues — must stay disabled |
 | displacementMapping | **false** | See Known Issues — must stay disabled |
 
-**Purpose**: Lightweight model for web viewers. The OBJ is converted to a single `.glb` file (binary glTF with embedded textures) by the Python script, typically achieving massive size reduction.
+**Purpose**: Lightweight model for web viewers. The OBJ is converted to a single `.glb` file (binary glTF with embedded textures) by the Python script, typically achieving massive size reduction. The python script goes one step further by applying Draco geometry compression on the GLB to reduce size by an additional 80-90%.
 
 ---
 
@@ -85,7 +85,7 @@ The Python script (`main.py`) acts as the orchestration layer for the serverless
 2. **Pipeline Execution**: Prepares the `.mg` JSON template and launches `meshroom_batch` via CLI. It uses a `TMPDIR`/`TEMP` redirect so the cache stays inside the output directory (portable across Windows and Docker/Linux).
 3. **Output Organization**: Identifies both Texturing branches in the cache (by texture file extension: PNG = High, JPG = Low) and copies them into organized subfolders (`Texturing_1/`, `Texturing_2/`).
 4. **Post-Processing (High Branch)**: Uses `trimesh` to load the high-poly `.obj` and export a watertight `.stl` for 3D printing. The original `.obj` + `.png` are preserved.
-5. **Post-Processing (Low Branch)**: Uses `trimesh` to pack the low-poly `.obj` + `.mtl` + JPG textures into a single `.glb` binary file.
+5. **Post-Processing (Low Branch)**: Uses `trimesh` to pack the low-poly `.obj` + `.mtl` + JPG textures into a single `.glb` binary file. It then runs a custom **Draco Compression** pass using `DracoPy` and `pygltflib`. The pass strips the raw floating-point geometry arrays from the GLB and replaces them with an arithmetic-compressed Draco blob (`KHR_draco_mesh_compression`), reducing network bandwidth costs massively while keeping texture UV mapping intact.
 6. **Upload & Cleanup**: Zips the final `Texturing_1/` assets, `printable_model.stl`, and `web_model.glb` into `output.zip`, uploads it back to Cloudflare R2 (`upload_files.py`), and cleans up intermediate files.
 
 ---
