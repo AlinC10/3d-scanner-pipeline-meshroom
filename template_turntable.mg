@@ -69,7 +69,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "23885c4ca64243aafac2a0fdb66e66207e2cfb20",
+            "uid": "304d85299661b8f28ffcdef9138308ce0ff2ebae",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{DepthMap_1.input}",
@@ -109,7 +109,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "f44f79db19b0bae5024876e1c0b1516f2fa32782",
+            "uid": "6da696e3754ac3882acb2a91b38a9314938d420e",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{PrepareDenseScene_1.input}",
@@ -207,7 +207,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "4676d1360cdb4548457e484e9f101c71a97a74ab",
+            "uid": "49bd0fd74f9558a49761e9f8fc50033313b7dd73",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageSegmentationBox_1.input}",
@@ -249,7 +249,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "4fb6e3e3c0253ba828c005e10adeefb2b5ed6ae5",
+            "uid": "fa2f03a115c9e5ee57d0576a079c3e3ed24862ba",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageMatching_1.input}",
@@ -293,18 +293,18 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "8050a690be841177b8caa716f522fefb7901993b",
+            "uid": "b016ca3b1440ac4c22bb045de672bc920ac1fd70",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{CameraInit_1.output}",
                 "recognitionModelPath": "${RDS_RECOGNITION_MODEL_PATH}",
                 "detectionModelPath": "${RDS_DETECTION_MODEL_PATH}",
                 "detectionConfigPath": "${RDS_DETECTION_CONFIG_PATH}",
-                "prompt": "main",
-                "synonyms": "",
+                "prompt": "object",
+                "synonyms": "subject, item, main",
                 "forceDetection": true,
-                "thresholdDetection": 0.2,
-                "bboxMargin": 0,
+                "thresholdDetection": 0.4,
+                "bboxMargin": 10,
                 "useGpu": true,
                 "outputBboxImage": false,
                 "keepFilename": false,
@@ -333,7 +333,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "e9cdfb4b39aaef0a604ad80dda169030da7da4ce",
+            "uid": "11d05a034b2fdc7c7faacdffc886a5c5322d0928",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{FeatureExtraction_1.input}",
@@ -370,7 +370,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "b01a1682cdea976169b3586a837bf6e068a07e02",
+            "uid": "756d44f1b626f8226afaacfc74795f243d286aa7",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageDetectionPrompt_1.input}",
@@ -407,7 +407,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "03021c413331bf72b40da64b16a51809f37cf057",
+            "uid": "3d50c55ef99f37165c0054525dd5e95a0d643b19",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{MeshFiltering_1.outputMesh}",
@@ -439,7 +439,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "9fecfb1e35cf2f4a21f8dc0d29bb7690cef520d3",
+            "uid": "f39dd6717e7f8e363a47c8503e46f16b6e0e468d",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "inputMesh": "{Meshing_1.outputMesh}",
@@ -476,7 +476,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "67b3e08cb372b424ddeb8692605214df98b76053",
+            "uid": "2e41584ae463e7710f20297de248e46111467f6f",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "inputMesh": "{MeshDecimate_1.output}",
@@ -513,7 +513,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "2b8e92a211acfb90f7917f81ba93057096f76f36",
+            "uid": "2ec67e8f91e9fe55c71ebaeda72c0a9c8f8a6485",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{DepthMapFilter_1.input}",
@@ -601,7 +601,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "179f6f78961537efacf84832dc492f8b7f7470aa",
+            "uid": "a301e0bd813da6183ce2137cac899848aa20cf75",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{StructureFromMotion_1.output}",
@@ -638,7 +638,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "546c0f2af60b2261e0faf864e32d5edfe7d8317f",
+            "uid": "ac47b3f681b483d8ad72d3bdc04558fc2653384c",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{FeatureMatching_1.input}",
@@ -703,7 +703,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "0551d2d39bdc2aa4b43e14e37c090c18466d07c1",
+            "uid": "c8ee842af91cab2070322f969539c0e4dbbf15c8",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{Meshing_1.output}",
@@ -775,7 +775,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "5350fcaa39e3be0d41112b3a2fe1265bbc9a321e",
+            "uid": "73bb49a6e138e0dd418becdd2855405a0a0023b7",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{Meshing_1.output}",

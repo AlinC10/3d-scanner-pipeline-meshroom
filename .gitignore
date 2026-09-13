@@ -4,6 +4,7 @@ output.zip
 output
 dataset_test/input_images
 input_images
+output_1
 
 test.py
 convert_img.py

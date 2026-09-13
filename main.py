@@ -196,20 +196,14 @@ def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quan
     """
     Reads a GLB produced by trimesh and re-encodes all mesh primitive
     geometry buffers using Draco compression (KHR_draco_mesh_compression).
-
-    Correctly strips the original raw geometry bufferViews from the binary
-    chunk and replaces them with compact Draco blobs. Non-geometry bufferViews
-    (images/textures) are preserved unchanged.
-
-    Returns True on success, False if compression was skipped/failed.
     """
     if not _DRACO_AVAILABLE:
-        print("  [DRACO] DracoPy / pygltflib not installed — skipping compression.")
+        print("  [DRACO] DracoPy not installed — skipping compression.")
         return False
 
     try:
         import base64
-        from pygltflib import BufferView
+        from pygltflib import GLTF2, BufferView
 
         gltf = GLTF2().load(glb_path)
 
@@ -255,45 +249,34 @@ def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quan
                 if attrs.POSITION is None:
                     continue
 
-                # POSITION
                 acc = gltf.accessors[attrs.POSITION]
-                if acc.bufferView is not None:
-                    geometry_bv_set.add(acc.bufferView)
+                if acc.bufferView is not None: geometry_bv_set.add(acc.bufferView)
                 pos = _acc_to_array(attrs.POSITION).astype(np.float32)
 
-                # INDICES
                 faces = None
                 if prim.indices is not None:
                     acc = gltf.accessors[prim.indices]
-                    if acc.bufferView is not None:
-                        geometry_bv_set.add(acc.bufferView)
+                    if acc.bufferView is not None: geometry_bv_set.add(acc.bufferView)
                     faces = _acc_to_array(prim.indices).astype(np.uint32).flatten().reshape(-1, 3)
 
-                # NORMAL
                 nrm = None
                 if attrs.NORMAL is not None:
                     acc = gltf.accessors[attrs.NORMAL]
-                    if acc.bufferView is not None:
-                        geometry_bv_set.add(acc.bufferView)
+                    if acc.bufferView is not None: geometry_bv_set.add(acc.bufferView)
                     nrm = _acc_to_array(attrs.NORMAL).astype(np.float32)
 
-                # TEXCOORD_0
                 tex = None
                 if attrs.TEXCOORD_0 is not None:
                     acc = gltf.accessors[attrs.TEXCOORD_0]
-                    if acc.bufferView is not None:
-                        geometry_bv_set.add(acc.bufferView)
+                    if acc.bufferView is not None: geometry_bv_set.add(acc.bufferView)
                     tex = _acc_to_array(attrs.TEXCOORD_0).astype(np.float32)
 
                 prim_records.append((mi, pi, pos, faces, nrm, tex))
 
         if not prim_records:
-            print("  [DRACO] No compressible primitives found — skipping.")
             return False
 
         # ── Pass 2: null out geometry accessor bufferViews ───────────────
-        # Per the KHR_draco_mesh_compression spec, geometry accessors must
-        # have bufferView=None; the actual data comes from the Draco blob.
         for mi, pi, *_ in prim_records:
             prim  = gltf.meshes[mi].primitives[pi]
             attrs = prim.attributes
@@ -302,8 +285,8 @@ def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quan
                     gltf.accessors[acc_idx].bufferView = None
                     gltf.accessors[acc_idx].byteOffset = 0
 
-        # ── Pass 3: encode each primitive with DracoPy ───────────────────
-        draco_records = []   # (mi, pi, draco_bytes)
+        # ── Pass 3: encode each primitive with DracoPy and extract IDs ───
+        draco_records = []   # (mi, pi, draco_bytes, attr_ids)
         for mi, pi, pos, faces, nrm, tex in prim_records:
             kwargs = dict(
                 points              = pos,
@@ -316,10 +299,25 @@ def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quan
                 preserve_order      = False,
             )
             if nrm is not None:
-                kwargs["normals"] = nrm
+                kwargs["normals"] = nrm.astype(np.float64)
             if tex is not None:
-                kwargs["tex_coord"] = tex
-            draco_records.append((mi, pi, bytes(DracoPy.encode(**kwargs))))
+                kwargs["tex_coord"] = tex.astype(np.float64)
+                
+            draco_bytes = bytes(DracoPy.encode(**kwargs))
+            
+            # Decode briefly to read the unique IDs Draco automatically assigned
+            # Draco geometry attribute types: POSITION=0, NORMAL=1, TEX_COORD=3
+            decoded = DracoPy.decode(draco_bytes)
+            attr_ids = {}
+            for attr in decoded.attributes:
+                if attr['attribute_type'] == 0:
+                    attr_ids["POSITION"] = attr['unique_id']
+                elif attr['attribute_type'] == 1:
+                    attr_ids["NORMAL"] = attr['unique_id']
+                elif attr['attribute_type'] == 3:
+                    attr_ids["TEXCOORD_0"] = attr['unique_id']
+                    
+            draco_records.append((mi, pi, draco_bytes, attr_ids))
 
         # ── Pass 4: rebuild binary blob (drop geometry, keep images) ─────
         def _align4(b: bytes) -> bytes:
@@ -348,7 +346,7 @@ def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quan
 
         # Append Draco blobs
         draco_bv_map = {}   # (mi, pi) -> new BV index
-        for mi, pi, draco_bytes in draco_records:
+        for mi, pi, draco_bytes, _ in draco_records:
             bv_idx               = len(new_bvs)
             draco_bv_map[(mi, pi)] = bv_idx
 
@@ -369,14 +367,8 @@ def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quan
                 img.bufferView = old_to_new_bv.get(img.bufferView, None)
 
         # ── Pass 6: attach Draco extension to each primitive ─────────────
-        for mi, pi, _ in draco_records:
+        for mi, pi, _, attr_ids in draco_records:
             prim  = gltf.meshes[mi].primitives[pi]
-            attrs = prim.attributes
-            attr_ids, counter = {}, 0
-            attr_ids["POSITION"] = counter; counter += 1
-            if attrs.NORMAL     is not None: attr_ids["NORMAL"]     = counter; counter += 1
-            if attrs.TEXCOORD_0 is not None: attr_ids["TEXCOORD_0"] = counter; counter += 1
-
             if prim.extensions is None:
                 prim.extensions = {}
             prim.extensions["KHR_draco_mesh_compression"] = {
@@ -416,13 +408,8 @@ def convert_obj_to_glb(obj_folder, glb_path, compress_textures=True,
     """
     Packs an OBJ + MTL + texture images into a single GLB (binary glTF).
 
-    Stage 1 (trimesh): loads the OBJ, optionally re-encodes textures as JPG
-    in-memory, then writes a standard GLB.
-
-    Stage 2 (Draco, optional): if `draco=True` and DracoPy+pygltflib are
-    installed, re-encodes the mesh geometry buffers with Draco compression
-    (KHR_draco_mesh_compression), shrinking geometry by ~80-95%.
-    If Draco compression fails, the Stage 1 GLB is kept as-is.
+    Stage 1 (trimesh): loads the OBJ, optionally re-encodes textures as JPG.
+    Stage 2 (Draco, optional): re-encodes mesh geometry buffers with Draco.
     """
 
     obj_path = os.path.join(obj_folder, "texturedMesh.obj")
@@ -437,75 +424,39 @@ def convert_obj_to_glb(obj_folder, glb_path, compress_textures=True,
         scene = trimesh.load(obj_path, process=False, force="scene")
 
         if hasattr(scene, "geometry"):
-            has_materials = any(
-                getattr(geom, "visual", None) is not None
-                and hasattr(geom.visual, "material")
-                and geom.visual.material is not None
-                for geom in scene.geometry.values()
-            )
-            if not has_materials:
-                print("  [GLB] WARNING: No materials detected after load — "
-                      "check that the .mtl file and textures are present "
-                      "in the same folder as the OBJ.")
-
             if compress_textures:
                 for geom in scene.geometry.values():
                     if hasattr(geom.visual, "material"):
                         mat = geom.visual.material
+                        for attr_name in ['image', 'baseColorTexture']:
+                            if hasattr(mat, attr_name) and getattr(mat, attr_name) is not None:
+                                img = getattr(mat, attr_name)
+                                if img.mode != 'RGB':
+                                    img = img.convert('RGB')
+                                buffer = io.BytesIO()
+                                img.save(buffer, format="JPEG", quality=85)
+                                buffer.seek(0)
+                                setattr(mat, attr_name, Image.open(buffer))
+                                getattr(mat, attr_name)._meshroom_buffer = buffer
 
-                        # For OBJ, trimesh uses SimpleMaterial which uses the 'image' attribute
-                        if hasattr(mat, 'image') and mat.image is not None:
-                            img = mat.image
-                            if img.mode != 'RGB':
-                                img = img.convert('RGB')
-
-                            buffer = io.BytesIO()
-                            img.save(buffer, format="JPEG", quality=85)
-                            buffer.seek(0)
-                            mat.image = Image.open(buffer)
-                            mat.image._meshroom_buffer = buffer  # Keep buffer alive!
-
-                        # Also check for baseColorTexture (PBRMaterial format) just in case
-                        if hasattr(mat, 'baseColorTexture') and mat.baseColorTexture is not None:
-                            img = mat.baseColorTexture
-                            if img.mode != 'RGB':
-                                img = img.convert('RGB')
-                            buffer = io.BytesIO()
-                            img.save(buffer, format="JPEG", quality=85)
-                            buffer.seek(0)
-                            mat.baseColorTexture = Image.open(buffer)
-                            mat.baseColorTexture._meshroom_buffer = buffer  # Keep buffer alive!
-
-        # ── Stage 1: export standard GLB via trimesh ─────────────────────
+        # Export standard GLB via trimesh
         with open(glb_path, "wb") as f:
             f.write(scene.export(file_type="glb"))
 
         size_mb  = os.path.getsize(glb_path) / (1024 * 1024)
         obj_size = os.path.getsize(obj_path)  / (1024 * 1024)
         ratio    = (1 - size_mb / obj_size) * 100 if obj_size > 0 else 0
-        print(f"  [GLB] Stage 1 saved: {glb_path} ({size_mb:.1f} MB)")
-        print(f"  [GLB] {obj_size:.1f} MB OBJ -> {size_mb:.1f} MB GLB ({ratio:.0f}% smaller)")
+        print(f"  [GLB] Saved standard GLB: {glb_path} ({size_mb:.1f} MB)")
 
-        # ── Stage 2: Draco geometry compression ──────────────────────────
+        # Apply Draco compression if requested
         if draco and _DRACO_AVAILABLE:
             draco_path = glb_path.replace(".glb", "_draco.glb")
-            print(f"\n  [GLB] Stage 2: applying Draco compression "
-                  f"(level={draco_level}, bits={draco_bits})...")
-            success = _apply_draco_compression(
-                glb_path, draco_path,
-                compression_level=draco_level,
-                quantization_bits=draco_bits,
-            )
+            success = _apply_draco_compression(glb_path, draco_path, draco_level, draco_bits)
             if success:
-                # Replace the plain GLB with the Draco-compressed version
                 os.replace(draco_path, glb_path)
-                final_mb = os.path.getsize(glb_path) / (1024 * 1024)
-                print(f"  [GLB] Final (Draco): {glb_path} ({final_mb:.1f} MB)")
+                print(f"  [GLB] Replaced with Draco compressed GLB.")
             else:
-                print("  [GLB] Draco stage skipped — keeping Stage 1 GLB.")
-        elif draco and not _DRACO_AVAILABLE:
-            print("  [GLB] Draco requested but DracoPy/pygltflib not installed "
-                  "— add them to requirements.txt. Keeping Stage 1 GLB.")
+                print("  [GLB] Draco stage skipped/failed — keeping standard GLB.")
 
     except Exception as e:
         print(f"  [GLB] Conversion error: {e}")
@@ -691,7 +642,7 @@ def run_pipeline(job):
         
         # High -> GLB for viewing with compressed JPGs
         high_glb_path = os.path.join(output_dir_abs, "high_model.glb")
-        convert_obj_to_glb(dest_high, high_glb_path, compress_textures=True, draco=False)
+        convert_obj_to_glb(dest_high, high_glb_path, compress_textures=True, draco=True)
         gc.collect()
 
     # Low -> STL, 3MF & GLB
@@ -702,7 +653,7 @@ def run_pipeline(job):
         gc.collect()
 
         glb_path = os.path.join(output_dir_abs, "low_model.glb")
-        convert_obj_to_glb(dest_low, glb_path, compress_textures=True, draco=True, draco_level=10, draco_bits=12)
+        convert_obj_to_glb(dest_low, glb_path, compress_textures=True, draco=True)
         gc.collect()
 
     # -- Summary report --------------------------------------------------

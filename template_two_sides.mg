@@ -14,6 +14,7 @@
             "ImageMatchingMultiSfM": "1.0",
             "ImageSegmentationBox": "0.2",
             "MeshDecimate": "1.0",
+            "MeshFiltering": "3.0",
             "Meshing": "7.0",
             "PrepareDenseScene": "3.1",
             "SfMMerge": "3.0",
@@ -187,7 +188,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "7e9b79d689be372aa4f62c42f4023ffe71b9bcb9",
+            "uid": "edac67b913872b8eac91f0141a3ee624832b4a48",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{DepthMap_3.input}",
@@ -227,7 +228,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "87aaac2ef2d51148a89de2ceb1aceaa041ebfae9",
+            "uid": "f4713a859ad62508ffe9644fd2235a7c4e22bb2c",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{PrepareDenseScene_3.input}",
@@ -409,7 +410,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "f94c21610151723925682723238fdb4b4df9800c",
+            "uid": "49bd0fd74f9558a49761e9f8fc50033313b7dd73",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageSegmentationBox_1.input}",
@@ -451,7 +452,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "f94c21610151723925682723238fdb4b4df9800c",
+            "uid": "49bd0fd74f9558a49761e9f8fc50033313b7dd73",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageSegmentationBox_2.input}",
@@ -581,7 +582,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "2fb9c83466829134cba933298652c70d948ffeb4",
+            "uid": "aa40ffe82ad53d25c114516b47c74d5133e21e56",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageMatchingMultiSfM_1.outputCombinedSfM}",
@@ -631,7 +632,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "d9892995a1fd2cb507c31bd644e4de685fc8c3d2",
+            "uid": "fa2f03a115c9e5ee57d0576a079c3e3ed24862ba",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageMatching_3.input}",
@@ -677,7 +678,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "d9892995a1fd2cb507c31bd644e4de685fc8c3d2",
+            "uid": "fa2f03a115c9e5ee57d0576a079c3e3ed24862ba",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageMatching_4.input}",
@@ -723,18 +724,18 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "d9e32674b19b5a454ec52f978e415595f1c99266",
+            "uid": "b016ca3b1440ac4c22bb045de672bc920ac1fd70",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{CameraInit_1.output}",
                 "recognitionModelPath": "${RDS_RECOGNITION_MODEL_PATH}",
                 "detectionModelPath": "${RDS_DETECTION_MODEL_PATH}",
                 "detectionConfigPath": "${RDS_DETECTION_CONFIG_PATH}",
-                "prompt": "main",
-                "synonyms": "",
+                "prompt": "object",
+                "synonyms": "subject, item, main",
                 "forceDetection": true,
-                "thresholdDetection": 0.3,
-                "bboxMargin": 0,
+                "thresholdDetection": 0.4,
+                "bboxMargin": 10,
                 "useGpu": true,
                 "outputBboxImage": false,
                 "keepFilename": false,
@@ -763,18 +764,18 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "d9e32674b19b5a454ec52f978e415595f1c99266",
+            "uid": "b016ca3b1440ac4c22bb045de672bc920ac1fd70",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{CameraInit_2.output}",
                 "recognitionModelPath": "${RDS_RECOGNITION_MODEL_PATH}",
                 "detectionModelPath": "${RDS_DETECTION_MODEL_PATH}",
                 "detectionConfigPath": "${RDS_DETECTION_CONFIG_PATH}",
-                "prompt": "main",
-                "synonyms": "",
+                "prompt": "object",
+                "synonyms": "subject, item, main",
                 "forceDetection": true,
-                "thresholdDetection": 0.3,
-                "bboxMargin": 0,
+                "thresholdDetection": 0.4,
+                "bboxMargin": 10,
                 "useGpu": true,
                 "outputBboxImage": false,
                 "keepFilename": false,
@@ -803,7 +804,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "792f2b629b515ca1e6497d73a3af4563547d9796",
+            "uid": "cb3d4473c0fafcbd730a926fe2b0c86632817fc9",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{FeatureExtraction_3.input}",
@@ -918,7 +919,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "9cfc2a6ac6f77157fe0afbc236d9640187354735",
+            "uid": "11d05a034b2fdc7c7faacdffc886a5c5322d0928",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{FeatureExtraction_3.input}",
@@ -955,7 +956,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "9cfc2a6ac6f77157fe0afbc236d9640187354735",
+            "uid": "11d05a034b2fdc7c7faacdffc886a5c5322d0928",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{FeatureExtraction_4.input}",
@@ -992,7 +993,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "e80ad5a408c1d9179d2100877df5374d1f73d16c",
+            "uid": "756d44f1b626f8226afaacfc74795f243d286aa7",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageDetectionPrompt_1.input}",
@@ -1029,7 +1030,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "e80ad5a408c1d9179d2100877df5374d1f73d16c",
+            "uid": "756d44f1b626f8226afaacfc74795f243d286aa7",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ImageDetectionPrompt_2.input}",
@@ -1066,11 +1067,11 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "725e77e6d4b4c7b4eec53da0d37748fb283690d7",
+            "uid": "6fe482bf6369d5e940fb4c5f5f6e0b9949bc78f8",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{MeshFiltering_3.outputMesh}",
-                "simplificationFactor": 0.0,
+                "simplificationFactor": 0.05,
                 "nbVertices": 0,
                 "minVertices": 0,
                 "maxVertices": 50000,
@@ -1098,7 +1099,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "84e95d64daf09e8dbf5d2044e883c5382a9b6143",
+            "uid": "ca2a08216e5fc1d2dd663e5357cf72864e1e2ac4",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "inputMesh": "{MeshDecimate_1.output}",
@@ -1110,7 +1111,7 @@
                 "smoothingLambda": 1.0,
                 "filteringSubset": "all",
                 "filteringIterations": 1,
-                "filterLargeTrianglesFactor": 0.0,
+                "filterLargeTrianglesFactor": 30.0,
                 "filterTrianglesRatio": 0.0,
                 "verboseLevel": "info"
             },
@@ -1122,8 +1123,7 @@
             },
             "outputs": {
                 "outputMesh": "{nodeCacheFolder}/mesh.{outputMeshFileTypeValue}"
-            },
-            "version": "3.0"
+            }
         },
         "MeshFiltering_3": {
             "nodeType": "MeshFiltering",
@@ -1136,7 +1136,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "969ec65032fa9a13593efe0e61305e2b288e8082",
+            "uid": "b905b75052411a94f990a35143f8bda596e8d12b",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "inputMesh": "{Meshing_3.outputMesh}",
@@ -1160,8 +1160,7 @@
             },
             "outputs": {
                 "outputMesh": "{nodeCacheFolder}/mesh.{outputMeshFileTypeValue}"
-            },
-            "version": "3.0"
+            }
         },
         "Meshing_3": {
             "nodeType": "Meshing",
@@ -1174,7 +1173,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "4c1cff1807ca1e3f2e6e2e71f95ccb2610d63046",
+            "uid": "c1e2ea831801517814f66ffb353423413dc7b953",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{DepthMapFilter_3.input}",
@@ -1262,7 +1261,7 @@
                 "size": 0,
                 "split": 0
             },
-            "uid": "048c35b45d4d5130c082c40b3b8af3e435452d04",
+            "uid": "ee159f673dc776f4124a90cdf831514226a4b3f1",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{SfMTransform_1.output}",
@@ -1300,7 +1299,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "f8d7d34ff68181d9b50a514475e241d1adfa45f9",
+            "uid": "2dacbde92e18de3d115261840d09bf66fb40cbef",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "inputs": [
@@ -1338,7 +1337,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "cafebf99bcc311512eab32e18f9390c693a8c355",
+            "uid": "b163595797e4ac4b1782a1ce984f51c9fc4b2ccb",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{SfMTriangulation_4.output}",
@@ -1394,7 +1393,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "aa49bc9faf9001cdb9756443eb7a47b126cb3c2b",
+            "uid": "26fe6a136341aae39d64aa7963d11a85aab5cc4b",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ConvertSfMFormat_3.output}",
@@ -1438,7 +1437,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "aa49bc9faf9001cdb9756443eb7a47b126cb3c2b",
+            "uid": "26fe6a136341aae39d64aa7963d11a85aab5cc4b",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{ConvertSfMFormat_2.output}",
@@ -1482,7 +1481,7 @@
                 "size": 0,
                 "split": 1
             },
-            "uid": "b8ec7dc8662105e89398b30207e967ba9418e639",
+            "uid": "b60408611818afc74bd3050f8153496b030ff0f3",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{SfMMerge_1.output}",
@@ -1658,7 +1657,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "56c1f4916295ed86e6362c2f3b6a65d2c710c4ed",
+            "uid": "9233599ce21ddaba53b5529e4e90f4e1b57f7585",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{Meshing_3.output}",
@@ -1730,7 +1729,7 @@
                 "size": 1,
                 "split": 1
             },
-            "uid": "dcc3459940862f859883a31d30320974cd8953b4",
+            "uid": "72b08a7f6eca0f2ba765ee7622b60b93b5285f83",
             "internalFolder": "{cache}/{nodeType}/{uid}",
             "inputs": {
                 "input": "{Meshing_3.output}",
@@ -1789,8 +1788,7 @@
                 "outputMesh": "{nodeCacheFolder}/texturedMesh.{outputMeshFileTypeValue}",
                 "outputMaterial": "{nodeCacheFolder}/texturedMesh.mtl",
                 "outputTextures": "{nodeCacheFolder}/texture_*.jpg"
-            },
-            "version": "6.0"
+            }
         }
     }
 }
