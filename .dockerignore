@@ -1,17 +1,19 @@
 dataset_test/output/*
 MeshroomCache
 output
+output_1
 output.zip
 dataset_test/input_images
 dataset_monstree-master
 input_images
 dataset_test
 template.copy.mg
-template.mg
 
 test.py
 simulation.py
 convert_img.py
+ram_heuristic.py
+launch_pod_job.py
 
 .venv
 __pycache__
@@ -28,6 +30,5 @@ Dockerfile
 .aiexclude
 .gitignore
 
-README.md
-AGENTS.md   
-TODOS.md   
+*.md
+docs

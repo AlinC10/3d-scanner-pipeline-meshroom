@@ -29,11 +29,14 @@ OUTPUT_DIR="./output"
 
 
 def delete_file(object_name: str, bucket: str = R2_PIPELINE_IMAGES_BUCKET) -> bool:
-  """Delete a file from an S3 bucket
-
+  """
+  Delete a file from an S3 bucket.
   :param object_name: S3 object name
+  :type object_name: str
   :param bucket: Bucket to delete from
+  :type bucket: str
   :return: True if file was deleted, else False
+  :rtype: bool
   """
   # Delete the file
   try:
@@ -44,9 +47,12 @@ def delete_file(object_name: str, bucket: str = R2_PIPELINE_IMAGES_BUCKET) -> bo
   return True
 
 def delete_all_files_from_bucket(bucket: str = R2_PIPELINE_IMAGES_BUCKET) -> None:
-  """Delete all files from R2 bucket.
-
+  """
+  Delete all files from R2 bucket.
   :param bucket: Bucket to delete from
+  :type bucket: str
+  :return: None
+  :rtype: None
   """
   response = s3.list_objects_v2(Bucket=bucket)
 
@@ -70,12 +76,16 @@ def delete_all_files_from_bucket(bucket: str = R2_PIPELINE_IMAGES_BUCKET) -> Non
   print("No files found in the bucket.")
 
 def upload_file(file_name: str, bucket: str = R2_PIPELINE_IMAGES_BUCKET, object_name: str | None = None) -> bool:
-  """Upload a file to an S3 bucket
-
+  """
+  Upload a file to an S3 bucket
   :param file_name: File to upload
+  :type file_name: str
   :param bucket: Bucket to upload to
+  :type bucket: str
   :param object_name: S3 object name. If not specified then file_name is used
+  :type object_name: str | None
   :return: True if file was uploaded, else False
+  :rtype: bool
   """
 
   # If S3 object_name was not specified, use file_name
@@ -103,10 +113,12 @@ def create_output_zip(folder_path: str, zip_path: str) -> str:
       stl/low_model.stl
       3mf/high_model.3mf
       3mf/low_model.3mf
-
   :param folder_path: Absolute or relative path to the output directory.
-  :param zip_path:    Destination path for the .zip file.
+  :type folder_path: str
+  :param zip_path: Destination path for the .zip file.
+  :type zip_path: str
   :return: zip_path on success, raises on error.
+  :rtype: str
   """
   texturing1_dir = os.path.join(folder_path, "Texturing_1")
   texturing2_dir = os.path.join(folder_path, "Texturing_2")
@@ -187,11 +199,14 @@ def upload_generated_obj(folder_path: str, object_name: str = "output.zip",
       stl/low_model.stl
       3mf/high_model.3mf
       3mf/low_model.3mf
-
-  :param folder_path:  Relative or absolute path to the output directory.
-  :param object_name:  Key used when storing the file in R2.
+  :param folder_path: Relative or absolute path to the output directory.
+  :type folder_path: str
+  :param object_name: Key used when storing the file in R2.
+  :type object_name: str
   :param bucket: Bucket to download from
+  :type bucket: str
   :return: True if upload succeeded, False otherwise.
+  :rtype: bool
   """
   zip_path = os.path.join(folder_path, "output.zip")
 
@@ -214,12 +229,16 @@ def upload_generated_obj(folder_path: str, object_name: str = "output.zip",
   return success
 
 def download_file(object_name: str, file_name: str | None = None, bucket: str = R2_PIPELINE_IMAGES_BUCKET) -> bool:
-  """Download a file from an S3 bucket
-
+  """
+  Download a file from an S3 bucket
   :param object_name: S3 object name
+  :type object_name: str
   :param file_name: File to download. If not specified then object_name is used
+  :type file_name: str | None
   :param bucket: Bucket to download from
+  :type bucket: str
   :return: True if file was downloaded, else False
+  :rtype: bool
   """
 
   # If file_name was not specified, use object_name
@@ -239,7 +258,8 @@ def download_every_img_from_bucket(local_dir: str = INPUT_IMAGES,
                                    bucket: str = R2_PIPELINE_IMAGES_BUCKET,
                                    rig_mode: bool = False,
                                    two_sides_mode: bool = False):
-  """Download all images from the R2 bucket to a local directory.
+  """
+  Download all images from the R2 bucket to a local directory.
 
   Single mode (rig_mode=False, two_sides_mode=False):
       Downloads all objects flat into `local_dir/`.
@@ -256,11 +276,16 @@ def download_every_img_from_bucket(local_dir: str = INPUT_IMAGES,
                rig1/1/0001.jpg  →  input_images/rig1/1/0001.jpg
                rig2/0/0001.jpg  →  input_images/rig2/0/0001.jpg
                rig2/1/0001.jpg  →  input_images/rig2/1/0001.jpg
-
   :param local_dir: Local directory to download images into (used in single mode).
+  :type local_dir: str
   :param bucket: R2 bucket name.
+  :type bucket: str
   :param rig_mode: If True, download rig-structured images.
+  :type rig_mode: bool
   :param two_sides_mode: If True, download two-sides structured images into rig1/rig2.
+  :type two_sides_mode: bool
+  :return: None
+  :rtype: None
   """
   if two_sides_mode:
       os.makedirs(TWO_SIDES_RIG1, exist_ok=True)
@@ -337,12 +362,14 @@ def download_generated_obj(object_name: str = "output.zip", dest_dir: str | None
       dest_dir/stl/low_model.stl
       dest_dir/3mf/high_model.3mf
       dest_dir/3mf/low_model.3mf
-
   :param object_name: R2 key of the zip file (e.g. "output.zip").
-  :param dest_dir:    Local directory where the zip is extracted.
-                      Created automatically if it does not exist.
+  :type object_name: str
+  :param dest_dir: Local directory where the zip is extracted. Created automatically if it does not exist.
+  :type dest_dir: str | None
   :param bucket: Bucket to download from
+  :type bucket: str
   :return: True if download + extraction succeeded, False otherwise.
+  :rtype: bool
   """
   if not dest_dir:
       dest_dir = os.getcwd()

@@ -1,6 +1,10 @@
-# MESHROOM_EXE="../runpod-volume/Meshroom-2025.1.0/meshroom_batch"
-MESHROOM_EXE="D:/Meshroom-2025.1.0/meshroom_batch.exe"
+import os
+from dotenv import load_dotenv
 
-TEMPLATE_MG="./template.mg"
-TEMPLATE_TURNTABLE_MG="./template_turntable.mg"
-TEMPLATE_TWO_SIDES_MG="./template_two_sides.mg"
+load_dotenv()
+
+MESHROOM_EXE = os.getenv("MESHROOM_EXE", "D:/Meshroom-2025.1.0/meshroom_batch.exe")
+
+TEMPLATE_MG="./meshroom_templates/template.mg"
+TEMPLATE_TURNTABLE_MG="./meshroom_templates/template_turntable.mg"
+TEMPLATE_TWO_SIDES_MG="./meshroom_templates/template_two_sides.mg"

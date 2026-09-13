@@ -101,7 +101,7 @@ if __name__ == "__main__":
     # Run a Docker command
     print("Run Docker Container...")
     result = subprocess.run(
-        args="docker run --gpus all --env-file .env -i -v \"D:/Docker_Meshroom:/runpod-volume\" meshroom_pipeline",
+        args="docker run --gpus all --env-file .env -e LOCAL_SIMULATION=1 -e RAM_MIN_GB=4 -i -v \"D:/Docker_Meshroom:/runpod-volume\" meshroom_pipeline",
         text=True,
         check=True,
         shell=True

@@ -6,7 +6,17 @@ import shutil
 import tempfile
 import gc
 import trimesh
-import runpod
+def progress_update(job, status_dict):
+    """
+    Updates the progress of the job.
+    :param job: The job object.
+    :type job: dict
+    :param status_dict: The status dictionary.
+    :type status_dict: dict
+    :return: None
+    :rtype: None
+    """
+    print(f"[PROGRESS] {status_dict}")
 import io
 import time
 import threading
@@ -18,20 +28,29 @@ import clouddlare_r2 as r2
 # Draco compression support (optional — graceful fallback if not installed)
 try:
     import DracoPy
-    import struct
     import numpy as np
-    from pygltflib import GLTF2
     _DRACO_AVAILABLE = True
 except ImportError:
     _DRACO_AVAILABLE = False
 
 def _monitor_memory():
+    """
+    Monitors RAM and swap memory usage in a separate thread.
+    :return: None
+    :rtype: None
+    """
     global _highest_ram, _mem_running
     _highest_ram = 0
     _mem_running = True
     seconds_passed = 0
     
     def print_final():
+        """
+        Prints the final highest memory consumed and stops monitoring.
+        
+        :return: None
+        :rtype: None
+        """
         global _mem_running
         _mem_running = False
         print(f"\n[MEMORY] Final Highest RAM + Swap Consumed: {_highest_ram:.2f} MB\n")
@@ -74,6 +93,13 @@ def prepare_pipeline(template_path, temp_mg_path):
     NOTE (Meshroom 2025): The Texturing node's 'output' field cannot be
     overridden via inputs (causes DescriptionConflict). Results are written
     to MeshroomCache and copied by this script afterward.
+    
+    :param template_path: Path to the input .mg template file.
+    :type template_path: str
+    :param temp_mg_path: Path where the temporary .mg file will be saved.
+    :type temp_mg_path: str
+    :return: List of Texturing node names found in the template.
+    :rtype: list
     """
     with open(template_path, "r", encoding="utf-8") as f:
         pipeline_data = json.load(f)
@@ -101,6 +127,11 @@ def find_texturing_cache_folders(cache_root):
     Branches are identified by their texture file extensions:
       - PNG textures -> High branch (full quality for printing)
       - JPG textures -> Low branch (compressed for web)
+      
+    :param cache_root: Path to the MeshroomCache root directory.
+    :type cache_root: str
+    :return: Dictionary containing paths to the high and low texturing cache folders.
+    :rtype: dict
     """
     texturing_dir = os.path.join(cache_root, "Texturing")
     result = {"high": None, "low": None}
@@ -136,6 +167,15 @@ def copy_texturing_output(cache_folder, dest_folder, label):
     cache folder into the destination folder.
 
     Returns the path to the copied texturedMesh.obj, or None on failure.
+    
+    :param cache_folder: Path to the source cache folder.
+    :type cache_folder: str
+    :param dest_folder: Path to the destination folder.
+    :type dest_folder: str
+    :param label: Label for logging purposes.
+    :type label: str
+    :return: Path to the copied texturedMesh.obj, or None on failure.
+    :rtype: str or None
     """
     if not cache_folder or not os.path.exists(cache_folder):
         print(f"  [{label}] WARNING: Cache folder not found: {cache_folder}")
@@ -170,7 +210,18 @@ def copy_texturing_output(cache_folder, dest_folder, label):
 
 
 def convert_obj_to_print_formats(obj_path, stl_path, mf_path):
-    """Converts a high-poly OBJ mesh to watertight STL and 3MF formats for 3D printing."""
+    """
+    Converts a high-poly OBJ mesh to watertight STL and 3MF formats for 3D printing.
+    
+    :param obj_path: Path to the input OBJ file.
+    :type obj_path: str
+    :param stl_path: Path where the output STL file will be saved.
+    :type stl_path: str
+    :param mf_path: Path where the output 3MF file will be saved.
+    :type mf_path: str
+    :return: None
+    :rtype: None
+    """
     try:
         print(f"\n  [PRINT] Processing geometry: {os.path.basename(obj_path)}...")
         mesh = trimesh.load(obj_path, force="mesh")
@@ -196,6 +247,17 @@ def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quan
     """
     Reads a GLB produced by trimesh and re-encodes all mesh primitive
     geometry buffers using Draco compression (KHR_draco_mesh_compression).
+    
+    :param glb_path: Path to the input GLB file.
+    :type glb_path: str
+    :param draco_glb_path: Path where the output Draco compressed GLB will be saved.
+    :type draco_glb_path: str
+    :param compression_level: Draco compression level (0-10).
+    :type compression_level: int
+    :param quantization_bits: Number of bits for Draco quantization.
+    :type quantization_bits: int
+    :return: True if compression was successful, False otherwise.
+    :rtype: bool
     """
     if not _DRACO_AVAILABLE:
         print("  [DRACO] DracoPy not installed — skipping compression.")
@@ -219,6 +281,13 @@ def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quan
 
         # ── helpers ───────────────────────────────────────────────────────
         def _bv_bytes(bv_idx):
+            """
+            Gets bytes of a buffer view.
+            :param bv_idx: Index of the buffer view.
+            :type bv_idx: int
+            :return: Bytes of the buffer view.
+            :rtype: bytes
+            """
             bv  = gltf.bufferViews[bv_idx]
             off = bv.byteOffset or 0
             return raw_bin[off : off + bv.byteLength]
@@ -229,6 +298,13 @@ def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quan
                       "MAT2":   4, "MAT3": 9, "MAT4": 16}
 
         def _acc_to_array(acc_idx):
+            """
+            Converts an accessor to a numpy array.
+            :param acc_idx: Index of the accessor.
+            :type acc_idx: int
+            :return: Numpy array containing accessor data.
+            :rtype: numpy.ndarray
+            """
             acc   = gltf.accessors[acc_idx]
             raw   = _bv_bytes(acc.bufferView)
             dtype = _COMPONENT[acc.componentType]
@@ -321,6 +397,14 @@ def _apply_draco_compression(glb_path, draco_glb_path, compression_level=7, quan
 
         # ── Pass 4: rebuild binary blob (drop geometry, keep images) ─────
         def _align4(b: bytes) -> bytes:
+            """
+            Aligns bytes to a 4-byte boundary.
+            
+            :param b: Input bytes.
+            :type b: bytes
+            :return: Aligned bytes.
+            :rtype: bytes
+            """
             rem = len(b) % 4
             return b + b"\x00" * (4 - rem) if rem else b
 
@@ -410,6 +494,21 @@ def convert_obj_to_glb(obj_folder, glb_path, compress_textures=True,
 
     Stage 1 (trimesh): loads the OBJ, optionally re-encodes textures as JPG.
     Stage 2 (Draco, optional): re-encodes mesh geometry buffers with Draco.
+    
+    :param obj_folder: Path to the folder containing the OBJ, MTL, and textures.
+    :type obj_folder: str
+    :param glb_path: Path where the output GLB file will be saved.
+    :type glb_path: str
+    :param compress_textures: Whether to compress textures to JPG.
+    :type compress_textures: bool
+    :param draco: Whether to apply Draco compression.
+    :type draco: bool
+    :param draco_level: Draco compression level.
+    :type draco_level: int
+    :param draco_bits: Number of bits for Draco quantization.
+    :type draco_bits: int
+    :return: None
+    :rtype: None
     """
 
     obj_path = os.path.join(obj_folder, "texturedMesh.obj")
@@ -477,8 +576,13 @@ def run_pipeline(job):
       4. Post-processing:
             - High branch -> STL for 3D printing
             - Low branch  -> GLB for web (single binary, embedded textures)
+            
+    :param job: Dictionary containing job configuration and inputs.
+    :type job: dict
+    :return: Dictionary containing the status of the pipeline run.
+    :rtype: dict
     """
-    runpod.serverless.progress_update(job, {
+    progress_update(job, {
         "status": "PIPELINE CONFIGURATION",
         "progress": 0
     })
@@ -536,7 +640,7 @@ def run_pipeline(job):
 
     # Download Images from R2
     if not MESHROOM_EXE.startswith("D:"):
-        runpod.serverless.progress_update(job, {
+        progress_update(job, {
             "status": "Downloading images...",
             "progress": 20
         })
@@ -648,7 +752,7 @@ def run_pipeline(job):
     # -- Step 2: Run Meshroom --------------------------------------------
     print(f"\n[2/4] Running Meshroom (this may take several minutes)...")
 
-    runpod.serverless.progress_update(job, {
+    progress_update(job, {
         "status": "Running Meshroom (this may take several minutes)...",
         "progress": 40
     })
@@ -719,7 +823,7 @@ def run_pipeline(job):
     # -- Step 3: Organize outputs ----------------------------------------
     print(f"\n[3/4] Organizing output files...")
 
-    runpod.serverless.progress_update(job, {
+    progress_update(job, {
         "status": "Organizing output files...",
         "progress": 60
     })
@@ -749,7 +853,7 @@ def run_pipeline(job):
 
     # -- Step 4: Post-processing -----------------------------------------
     print(f"\n[4/4] Post-processing...")
-    runpod.serverless.progress_update(job, {
+    progress_update(job, {
         "status": "Post-processing...",
         "progress": 80
     })
@@ -806,7 +910,7 @@ def run_pipeline(job):
     print(f"{'='*55}\n")
 
     if not MESHROOM_EXE.startswith("D:"):
-        runpod.serverless.progress_update(job, {
+        progress_update(job, {
             "status": "Upload generated files from server...",
             "progress": 100
         })
