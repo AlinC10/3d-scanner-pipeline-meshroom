@@ -2,11 +2,10 @@
 
 Automated 3D model generation from photographs using [AliceVision/Meshroom](https://alicevision.org/), producing three distinct output variants simultaneously. The pipeline is containerized using Docker and is designed for deployment as a serverless API on the **RunPod** platform.
 
-| Output | Format | Purpose | Typical Size |
-|---|---|---|---|
-| **High-poly model** | `.obj` + `.png` textures | Game development, VFX, detailed visualization | 150-300+ MB |
-| **Printable model** | `.stl` | 3D printing (watertight geometry) | 50-100 MB |
-| **Low-poly model** | `.glb` | Web applications & mobile viewers (compact binary format, easy to render) | 5-20 MB |
+| Output | Format | Purpose |
+|---|---|---|
+| **High-poly models** | `.obj` + `.png`, `.glb`, `.stl`, `.3mf` | High fidelity assets for VFX, gaming, detailed visualization, and high-res printing. |
+| **Low-poly models** | `.obj` + `.jpg`, `.glb`, `.stl`, `.3mf` | Optimized assets for web/mobile applications, fast loading, and quick prototyping. |
 
 ## How It Works
 
@@ -30,14 +29,17 @@ Input Images (Downloaded from Cloudflare R2)
 └──────────────────────────────────────────┼────────────────────┘
                                            │                    │
                                            ▼                    ▼
-                                 ┌───────────────────┐  ┌─────────────┐
-                                 │ OBJ → STL         │  │ OBJ → GLB   │
-                                 │ (trimesh)         │  │ (trimesh)   │
-                                 └───────────────────┘  └─────────────┘
-                                           │                    │
-                                           ▼                    ▼
-                             Texturing_1/  printable_model.stl  web_model.glb
-                      (High-poly OBJ + PNG)
+                                 ┌───────────────────┐  ┌───────────────────┐
+                                 │    High Branch    │  │    Low Branch     │
+                                 │   Post-Processing │  │   Post-Processing │
+                                 │      (trimesh)    │  │      (trimesh)    │
+                                 └─────────┬─────────┘  └─────────┬─────────┘
+                                           │                      │
+                                           ▼                      ▼
+                            - Texturing_1/ (OBJ+PNG)     - Texturing_2/ (OBJ+JPG)
+                            - high_model.stl             - low_model.stl
+                            - high_model.3mf             - low_model.3mf
+                            - high_model.glb (Draco)     - low_model.glb (Draco)
 ```
 
 The core orchestration is handled by Python (`main.py`):
@@ -46,11 +48,11 @@ The core orchestration is handled by Python (`main.py`):
 3. **Branching**:
    - The **High Branch** generates a detailed `.obj` with 4096px `.png` textures.
    - The **Low Branch** decimates the mesh and generates a lightweight `.obj` with 2048px `.jpg` textures.
-4. **Post-processing**:
-   - The High Branch `.obj` is provided as-is for game dev / VFX (`Texturing_1/`).
-   - The High Branch `.obj` is additionally converted to a watertight `.stl` for 3D printing.
-   - The Low Branch `.obj` is packed with its materials and `.jpg` textures into a single binary `.glb` file for web deployment (drastically reducing size).
-5. **Delivery**: Zips the final assets and uploads them back to Cloudflare R2.
+4. **Post-processing (Both Branches)**:
+   - The raw `.obj` + texture maps (PNG/JPG) are preserved for traditional 3D workflows.
+   - Both models are loaded via `trimesh`, holes are filled to make them watertight, and they are exported as **`.stl`** and **`.3mf`** formats for 3D printing.
+   - Both models are packed with their materials and textures into binary **`.glb`** files for web deployment. The `.glb` files undergo **Draco Compression**, stripping raw floating-point geometry and replacing it with an arithmetic-compressed Draco blob to drastically reduce file size.
+5. **Delivery**: Zips all the generated assets and uploads them back to Cloudflare R2.
 
 ## Architecture & Serverless Deployment
 
@@ -109,6 +111,37 @@ R2_ACCESS_KEY_ID=your_access_key
 R2_SECRET_ACCESS_KEY=your_secret_key
 ```
 
+## Operating Modes
+
+The serverless pipeline supports three different operational modes depending on how you captured your images. You specify the mode via the RunPod job payload: `{"input": {"mode": "<mode-name>"}}`.
+
+### 1. `single` Mode (Default)
+Use this for standard captures (e.g. drone mapping, handheld free-scanning).
+- **Template**: `template.mg`
+- **Payload**: `{"input": {"mode": "single"}}`
+- **R2 Bucket Setup**: Upload images directly to the root of the bucket.
+  - `IMG_0001.jpg`
+  - `IMG_0002.jpg`
+
+### 2. `rig` Mode
+Use this for multi-camera captures (e.g., a turntable with 2 cameras separated by an angle).
+- **Template**: `template.mg`
+- **Payload**: `{"input": {"mode": "rig"}}`
+- **R2 Bucket Setup**: Group images into folders named `rig/0/`, `rig/1/`, etc. (representing Camera 1 and Camera 2).
+  - `rig/0/0001.jpg`
+  - `rig/1/0001.jpg`
+
+### 3. `two-sides` Mode
+Use this for full 360° object scanning where you scan the object upright, flip it over, and scan the bottom. The pipeline processes both positions and merges them using `SfMMerge`.
+- **Template**: `template_two_sides.mg` (Uses two `CameraInit` nodes).
+- **Payload**: `{"input": {"mode": "two-sides"}}`
+- **R2 Bucket Setup**: Group images into `rig1/` (upright) and `rig2/` (flipped), maintaining camera subfolders.
+  - `rig1/0/0001.jpg`
+  - `rig1/1/0001.jpg`
+  - `rig2/0/0001.jpg`
+  - `rig2/1/0001.jpg`
+- **Note**: Because the Meshroom CLI does not support feeding multiple `CameraInit` nodes simultaneously via the `--input` flag, the Python orchestrator uses `aliceVision_cameraInit` to dynamically generate `.sfm` files for each rig and injects them directly into the `.mg` JSON at runtime.
+
 ## Usage
 
 ### 1. Local Simulation
@@ -119,7 +152,7 @@ You can simulate the entire flow locally using `simulation.py`:
 python simulation.py
 ```
 This script will:
-- Upload images from `input_images/` to R2.
+- Upload images from local `input_images/` to R2 (can simulate single, rig, or two-sides uploading).
 - Run the Docker container to process them.
 - Download the generated `output.zip` from R2.
 - Clean up the R2 bucket.
@@ -138,7 +171,7 @@ python main.py
 docker build -t meshroom_pipeline .
 ```
 
-## Pipeline Settings (template.mg)
+## Pipeline Settings
 
 ### High Branch (Texturing_1)
 | Setting | Value |

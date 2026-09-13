@@ -8,14 +8,14 @@
     *   **Implementation:** Pass `{"input": {"mode": "rig"}}` in the RunPod job payload to activate. Default is `"single"` (flat `input_images/` folder). For local simulation use `send_rig_images()` from `simulation.py`.
 
 ## 2. Meshroom Pipeline Update (v2025.1)
-*   [ ] **New project setup & template selection:** Create a new project by choosing between two dynamic pipeline options depending on your scanning needs:
-
+*   [x] **New project setup & template selection:** Create a new project by choosing between two dynamic pipeline options depending on your scanning needs:
     * **Basic 360° Scan (template_turntable.mg):** Use this single-pass template for a standard 360° rotation on the platan without flipping the object. It utilizes built-in AI background removal and processes much faster.
     * **Full 360° Scan (template_two_sides.mg):** Use this dual-pass template if the user chooses to flip the object at the end to capture the base. This pipeline takes double the time as it processes two separate sets of images and merges them using SfMMerge.
-*   [ ] **Folder Structure for Two Sides:** For the second pipeline (template_two_sides.mg), set up two distinct parent directories (rig1/ and rig2/), each containing the required synchronized subfolders (e.g., rig1/0/, rig1/1/ for the first position and rig2/0/, rig2/1/ for the flipped position).
+*   [x] **Folder Structure for Two Sides:** For the second pipeline (template_two_sides.mg), set up two distinct parent directories (rig1/ and rig2/), each containing the required synchronized subfolders (e.g., rig1/0/, rig1/1/ for the first position and rig2/0/, rig2/1/ for the flipped position).
+    *   **Implementation:** Pass `{"input": {"mode": "two-sides"}}` in the RunPod job payload to activate. Uses `template_two_sides.mg`. Because Meshroom's CLI `--input` does not support targeting multiple `CameraInit` nodes, the Python script executes `aliceVision_cameraInit` for each rig to generate `.sfm` files, injects them dynamically into the `.mg` JSON, and launches the pipeline.
 *   [x] **Migrate final nodes:** Copy your custom final nodes (Meshing, Filtering, Texturing - the branches for the 2 objects) from the old *Default Photogrammetry* project.
 *   [x] **Convert to .stl and .3mf for 3D Printing**
-*   [ ] **Connect to the new pipeline:** Paste the copied nodes into the new Turntable project. Delete the default final nodes from the new template that you do not need, and reconnect your custom ones to the main flow (usually to *StructureFromMotion* or *DepthMap*). Import the `rig/` folder to begin processing
+*   [x] **Connect to the new pipeline:** Paste the copied nodes into the new Turntable project. Delete the default final nodes from the new template that you do not need, and reconnect your custom ones to the main flow (usually to *StructureFromMotion* or *DepthMap*). Import the `rig/` folder to begin processing
 
 
 

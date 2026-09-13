@@ -73,6 +73,14 @@ Connected from `MeshFiltering_1`, optimized to prevent mobile browser crashes du
 
 **Purpose**: Lightweight model for web viewers. The OBJ is converted to a single `.glb` file (binary glTF with embedded textures) by the Python script, typically achieving massive size reduction. The python script goes one step further by applying Draco geometry compression on the GLB to reduce size by an additional 80-90%.
 
+## Operating Modes & Pipeline Templates
+
+The script supports three distinct operating modes, which determine how images are passed into Meshroom:
+
+1. **`single` Mode (Default)**: Uses `template.mg` for a standard, flat directory of images (e.g. from a drone or handheld camera).
+2. **`rig` Mode**: Uses `template.mg` with an input directory structure consisting of `rig/0/` and `rig/1/`. Used for multi-camera captures (e.g., a turntable with 2 cameras separated by 30 degrees).
+3. **`two-sides` Mode**: Uses `template_two_sides.mg`. Designed for scanning an object on a turntable, flipping it over, and scanning the bottom. It utilizes *two* separate `CameraInit` nodes which feed into an `SfMMerge` node.
+
 ---
 
 # Serverless Architecture & Python Script Role
@@ -81,12 +89,15 @@ The Python script (`main.py`) acts as the orchestration layer for the serverless
 
 **Main tasks:**
 
-1. **Environment Setup & Download**: Fetches the input image dataset from a specified Cloudflare R2 bucket (`download_files.py`).
-2. **Pipeline Execution**: Prepares the `.mg` JSON template and launches `meshroom_batch` via CLI. It uses a `TMPDIR`/`TEMP` redirect so the cache stays inside the output directory (portable across Windows and Docker/Linux).
+1. **Environment Setup & Download**: Fetches the input image dataset from a specified Cloudflare R2 bucket.
+2. **Pipeline Execution**: 
+   - Prepares the `.mg` JSON template.
+   - **For `two-sides` mode**: Meshroom's CLI `--input` argument fundamentally does not support targeting multiple `CameraInit` nodes in the same graph. To bypass this limitation, the script manually executes `aliceVision_cameraInit` for each rig (producing `.sfm` files), reads the generated viewpoints and intrinsics, and directly injects them into the `.mg` JSON before launching Meshroom.
+   - Launches `meshroom_batch`. It uses a `TMPDIR`/`TEMP` redirect so the cache stays inside the output directory (portable across Windows and Docker/Linux).
 3. **Output Organization**: Identifies both Texturing branches in the cache (by texture file extension: PNG = High, JPG = Low) and copies them into organized subfolders (`Texturing_1/`, `Texturing_2/`).
-4. **Post-Processing (High Branch)**: Uses `trimesh` to load the high-poly `.obj` and export a watertight `.stl` for 3D printing. The original `.obj` + `.png` are preserved.
-5. **Post-Processing (Low Branch)**: Uses `trimesh` to pack the low-poly `.obj` + `.mtl` + JPG textures into a single `.glb` binary file. It then runs a custom **Draco Compression** pass using `DracoPy` and `pygltflib`. The pass strips the raw floating-point geometry arrays from the GLB and replaces them with an arithmetic-compressed Draco blob (`KHR_draco_mesh_compression`), reducing network bandwidth costs massively while keeping texture UV mapping intact.
-6. **Upload & Cleanup**: Zips the final `Texturing_1/` assets, `printable_model.stl`, and `web_model.glb` into `output.zip`, uploads it back to Cloudflare R2 (`upload_files.py`), and cleans up intermediate files.
+4. **Post-Processing (Print Formats)**: Uses `trimesh` to load both high-poly and low-poly branches, run `trimesh.repair.fill_holes()`, and export watertight **`.stl`** and **`.3mf`** formats for 3D printing.
+5. **Post-Processing (Web Formats)**: Uses `trimesh` to pack the OBJ + MTL + JPG textures into a single `.glb` binary file. It then runs a custom **Draco Compression** pass using `DracoPy` and `pygltflib`. The pass strips the raw floating-point geometry arrays from the GLB, replaces them with an arithmetic-compressed Draco blob (`KHR_draco_mesh_compression`), and dynamically reads the exact C++ attribute IDs assigned by DracoPy to prevent 3D viewers from cross-wiring UVs with 3D positions.
+6. **Upload & Cleanup**: Packages the final outputs into `output.zip` containing `obj/`, `glb/`, `stl/`, and `3mf/` subfolders, uploads it back to Cloudflare R2, and cleans up intermediate files.
 
 ---
 

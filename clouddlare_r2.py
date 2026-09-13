@@ -21,6 +21,9 @@ R2_PIPELINE_IMAGES_BUCKET="photogrammetry-pipeline"
 INPUT_IMAGES="./input_images"
 # Rig mode: images split into ./input_images/rig/0/ (Camera 1) and ./input_images/rig/1/ (Camera 2)
 RIG_IMAGES="./input_images/rig"
+# Two-sides mode: two rig directories for scanning both sides of an object
+TWO_SIDES_RIG1="./input_images/rig1"
+TWO_SIDES_RIG2="./input_images/rig2"
 
 OUTPUT_DIR="./output"
 
@@ -234,46 +237,86 @@ def download_file(object_name: str, file_name: str | None = None, bucket: str = 
 
 def download_every_img_from_bucket(local_dir: str = INPUT_IMAGES,
                                    bucket: str = R2_PIPELINE_IMAGES_BUCKET,
-                                   rig_mode: bool = False):
+                                   rig_mode: bool = False,
+                                   two_sides_mode: bool = False):
   """Download all images from the R2 bucket to a local directory.
 
-  Single mode (rig_mode=False):
+  Single mode (rig_mode=False, two_sides_mode=False):
       Downloads all objects flat into `local_dir/`.
       R2 keys: IMG_0001.jpg  →  local_dir/IMG_0001.jpg
 
   Rig mode (rig_mode=True):
-      Downloads objects that start with 'rig/' and recreates the two-level
-      subfolder structure expected by Meshroom's multi-camera rig support.
-      R2 keys: rig/0/0001.jpg  →  local_dir/0/0001.jpg
-               rig/1/0001.jpg  →  local_dir/1/0001.jpg
-      Pass `local_dir=RIG_IMAGES` (i.e. './input_images/rig') so that
-      Meshroom receives the parent rig directory as --input.
+      Downloads all objects preserving subfolder structure into RIG_IMAGES.
+      R2 keys: rig/0/0001.jpg  →  input_images/rig/0/0001.jpg
+               rig/1/0001.jpg  →  input_images/rig/1/0001.jpg
 
-  :param local_dir: Local directory to download images into.
+  Two-sides mode (two_sides_mode=True):
+      Downloads objects preserving rig1/rig2 subfolder structure.
+      R2 keys: rig1/0/0001.jpg  →  input_images/rig1/0/0001.jpg
+               rig1/1/0001.jpg  →  input_images/rig1/1/0001.jpg
+               rig2/0/0001.jpg  →  input_images/rig2/0/0001.jpg
+               rig2/1/0001.jpg  →  input_images/rig2/1/0001.jpg
+
+  :param local_dir: Local directory to download images into (used in single mode).
   :param bucket: R2 bucket name.
-  :param rig_mode: If True, download rig-structured images preserving subfolders.
+  :param rig_mode: If True, download rig-structured images.
+  :param two_sides_mode: If True, download two-sides structured images into rig1/rig2.
   """
-  if rig_mode:
-      # List only objects under the 'rig/' prefix
-      response = s3.list_objects_v2(Bucket=bucket, Prefix="rig/")
-  else:
+  if two_sides_mode:
+      os.makedirs(TWO_SIDES_RIG1, exist_ok=True)
+      os.makedirs(TWO_SIDES_RIG2, exist_ok=True)
+
+      print("Downloading images from R2 (two-sides mode)...")
       response = s3.list_objects_v2(Bucket=bucket)
+      if 'Contents' in response:
+          for obj in response['Contents']:
+              file_key = obj['Key']
+              # Keys are: rig1/0/0001.jpg, rig2/1/0001.jpg, etc.
+              if file_key.startswith("rig1/"):
+                  sub_path = file_key[len("rig1/"):]  # e.g. "0/0001.jpg"
+                  local_path = os.path.join(TWO_SIDES_RIG1, *sub_path.split("/"))
+              elif file_key.startswith("rig2/"):
+                  sub_path = file_key[len("rig2/"):]
+                  local_path = os.path.join(TWO_SIDES_RIG2, *sub_path.split("/"))
+              else:
+                  continue
 
+              os.makedirs(os.path.dirname(local_path), exist_ok=True)
+              print(f"Downloading {file_key} -> {local_path}...")
+              download_file(file_key, local_path, bucket)
+
+      print("Downloaded every image (two-sides)")
+      return
+
+  if rig_mode:
+      target_dir = RIG_IMAGES
+      os.makedirs(target_dir, exist_ok=True)
+
+      print("Downloading images from R2 (rig mode)...")
+      response = s3.list_objects_v2(Bucket=bucket)
+      if 'Contents' in response:
+          for obj in response['Contents']:
+              file_key = obj['Key']
+              if not file_key.startswith("rig/"):
+                  continue
+              # file_key = "rig/0/0001.jpg". Strip "rig/" to get "0/0001.jpg"
+              sub_path = file_key[len("rig/"):]
+              local_path = os.path.join(target_dir, *sub_path.split("/"))
+              os.makedirs(os.path.dirname(local_path), exist_ok=True)
+              print(f"Downloading {file_key} -> {local_path}...")
+              download_file(file_key, local_path, bucket)
+
+      print("Downloaded every image (rig)")
+      return
+
+  # Single mode
   os.makedirs(local_dir, exist_ok=True)
-
   print("Downloading images from R2...")
+  response = s3.list_objects_v2(Bucket=bucket)
   if 'Contents' in response:
       for obj in response['Contents']:
           file_key = obj['Key']
-
-          if rig_mode:
-              # Strip the leading 'rig/' prefix so we get '0/0001.jpg' or '1/0001.jpg'
-              # then reconstruct the local path as local_dir/0/0001.jpg
-              relative_key = file_key[len("rig/"):]   # e.g. "0/0001.jpg"
-              local_path = os.path.join(local_dir, *relative_key.split("/"))
-          else:
-              local_path = os.path.join(local_dir, os.path.basename(file_key))
-
+          local_path = os.path.join(local_dir, os.path.basename(file_key))
           os.makedirs(os.path.dirname(local_path), exist_ok=True)
           print(f"Downloading {file_key} -> {local_path}...")
           download_file(file_key, local_path, bucket)

@@ -62,8 +62,8 @@ def _monitor_memory():
 _mem_thread = threading.Thread(target=_monitor_memory, daemon=True)
 _mem_thread.start()
 # === CONSTANTS ===
-from clouddlare_r2 import OUTPUT_DIR, INPUT_IMAGES, RIG_IMAGES, R2_PIPELINE_IMAGES_BUCKET
-from config import MESHROOM_EXE, TEMPLATE_MG
+from clouddlare_r2 import OUTPUT_DIR, INPUT_IMAGES, RIG_IMAGES, TWO_SIDES_RIG1, TWO_SIDES_RIG2, R2_PIPELINE_IMAGES_BUCKET
+from config import *
 
 
 # === UTILITY FUNCTIONS ===
@@ -497,25 +497,41 @@ def run_pipeline(job):
     # -- Determine input mode -----------------------------------------------
     # Accepted values: "single" (default, flat input_images/ folder)
     #                  "rig"    (input_images/rig/0/ + input_images/rig/1/)
-    # When submitting a RunPod job, pass: {"input": {"mode": "rig"}} to activate rig mode.
+    #                  "two-sides" (input_images/rig1/ + input_images/rig2/, dual CameraInit)
+    # When submitting a RunPod job, pass: {"input": {"mode": "rig"}} or {"input": {"mode": "two-sides"}}
     mode = job.get("input", {}).get("mode", "single").strip().lower()
     rig_mode = (mode == "rig")
+    two_sides_mode = (mode == "two-sides")
 
-    if rig_mode:
+    # Select the correct template based on mode
+    if two_sides_mode:
+        template_to_use = TEMPLATE_TWO_SIDES_MG
+        rig1_abs = os.path.abspath(TWO_SIDES_RIG1)
+        rig2_abs = os.path.abspath(TWO_SIDES_RIG2)
+        input_images_abs_dir = f"{rig1_abs} + {rig2_abs}"  # display only
+    elif rig_mode:
+        template_to_use = TEMPLATE_TURNTABLE_MG
         input_images_abs_dir = os.path.abspath(RIG_IMAGES)
     else:
+        template_to_use = TEMPLATE_MG
         input_images_abs_dir = os.path.abspath(INPUT_IMAGES)
 
     print(f"\n{'='*55}")
     print(f"  MESHROOM PIPELINE - INITIALIZATION")
     print(f"{'='*55}")
-    print(f"  Mode:         {'RIG (multi-camera)' if rig_mode else 'SINGLE (flat)'}")
-    print(f"  Input images: {input_images_abs_dir}")
+    if two_sides_mode:
+        print(f"  Mode:         TWO-SIDES (dual CameraInit)")
+        print(f"  Template:     {template_to_use}")
+        print(f"  Rig 1 (up):   {rig1_abs}")
+        print(f"  Rig 2 (flip): {rig2_abs}")
+    else:
+        print(f"  Mode:         {'RIG (multi-camera)' if rig_mode else 'SINGLE (flat)'}")
+        print(f"  Input images: {input_images_abs_dir}")
     print(f"  Output dir:   {output_dir_abs}")
 
     # -- Step 1: Prepare template ----------------------------------------
     print(f"\n[1/4] Preparing pipeline template...")
-    prepare_pipeline(TEMPLATE_MG, temp_mg_path)
+    prepare_pipeline(template_to_use, temp_mg_path)
 
 
     # Download Images from R2
@@ -525,10 +541,108 @@ def run_pipeline(job):
             "progress": 20
         })
         r2.download_every_img_from_bucket(
-            local_dir = RIG_IMAGES if rig_mode else INPUT_IMAGES,
-            bucket    = R2_PIPELINE_IMAGES_BUCKET,
-            rig_mode  = rig_mode,
+            local_dir       = RIG_IMAGES if rig_mode else INPUT_IMAGES,
+            bucket          = R2_PIPELINE_IMAGES_BUCKET,
+            rig_mode        = rig_mode,
+            two_sides_mode  = two_sides_mode,
         )
+
+    # -- Step 1b (two-sides only): Run aliceVision_cameraInit for each rig
+    #    and inject the generated .sfm paths into the template JSON ----------
+    if two_sides_mode:
+        print(f"\n[1b/4] Initializing cameras for two-sides mode...")
+
+        # Locate aliceVision_cameraInit next to meshroom_batch
+        meshroom_dir = os.path.dirname(os.path.abspath(MESHROOM_EXE))
+        camera_init_exe = os.path.join(meshroom_dir, "aliceVision", "bin", "aliceVision_cameraInit")
+        if os.name == "nt":
+            camera_init_exe += ".exe"
+
+        # Sensor database used by CameraInit for lens profile matching
+        sensor_db = os.path.join(meshroom_dir, "aliceVision", "share", "aliceVision", "cameraSensors.db")
+
+        sfm_paths = {}  # {"CameraInit_1": "/abs/path/cameraInit_rig1.sfm", ...}
+        for ci_node, rig_dir in [("CameraInit_1", rig1_abs), ("CameraInit_2", rig2_abs)]:
+            sfm_output = os.path.join(output_dir_abs, f"cameraInit_{ci_node}.sfm")
+            ci_cmd = [
+                camera_init_exe,
+                "--imageFolder", rig_dir,
+                "--output", sfm_output,
+                "--verboseLevel", "warning",
+            ]
+            if os.path.exists(sensor_db):
+                ci_cmd += ["--sensorDatabase", sensor_db]
+
+            print(f"  Running CameraInit for {ci_node}: {rig_dir}")
+            ci_result = subprocess.run(ci_cmd, capture_output=True, text=True)
+            if ci_result.returncode != 0:
+                print(f"  [ERROR] CameraInit failed for {ci_node}: {ci_result.stderr}")
+                raise RuntimeError(f"aliceVision_cameraInit failed for {ci_node}")
+
+            if not os.path.exists(sfm_output):
+                raise RuntimeError(f"CameraInit did not produce output: {sfm_output}")
+
+            sfm_paths[ci_node] = sfm_output
+            print(f"  {ci_node} -> {sfm_output}")
+
+        # Inject the .sfm file paths into the template JSON.
+        # Replace each CameraInit node's empty viewpoints with a reference
+        # to the generated .sfm file via the --input mechanism.
+        # We modify the JSON so that the nodes following CameraInit read
+        # from the .sfm output directly.
+        with open(temp_mg_path, "r", encoding="utf-8") as f:
+            pipeline_data = json.load(f)
+
+        graph = pipeline_data.get("graph", {})
+        for ci_node, sfm_path in sfm_paths.items():
+            # Load the .sfm file and extract viewpoints + intrinsics
+            with open(sfm_path, "r", encoding="utf-8") as f:
+                sfm_data = json.load(f)
+
+            viewpoints = sfm_data.get("views", [])
+            intrinsics = sfm_data.get("intrinsics", [])
+
+            # Convert SfM views to CameraInit viewpoints format
+            ci_viewpoints = []
+            for view in viewpoints:
+                ci_viewpoints.append({
+                    "viewId": view.get("viewId", -1),
+                    "poseId": view.get("poseId", -1),
+                    "path": view.get("path", ""),
+                    "intrinsicId": view.get("intrinsicId", -1),
+                    "rigId": view.get("rigId", -1),
+                    "subPoseId": view.get("subPoseId", -1),
+                    "metadata": view.get("metadata", ""),
+                })
+
+            # Convert SfM intrinsics to CameraInit intrinsics format
+            ci_intrinsics = []
+            for intr in intrinsics:
+                ci_intrinsics.append({
+                    "intrinsicId": intr.get("intrinsicId", -1),
+                    "initialFocalLength": intr.get("focalLength", -1),
+                    "focalLength": intr.get("focalLength", -1),
+                    "pixelRatio": intr.get("pixelRatio", 1.0),
+                    "pixelRatioLocked": intr.get("pixelRatioLocked", True),
+                    "type": intr.get("type", "radial3"),
+                    "width": intr.get("width", 0),
+                    "height": intr.get("height", 0),
+                    "sensorWidth": intr.get("sensorWidth", -1),
+                    "sensorHeight": intr.get("sensorHeight", -1),
+                    "serialNumber": intr.get("serialNumber", ""),
+                    "principalPoint": intr.get("principalPoint", {"x": 0, "y": 0}),
+                    "distortionParams": intr.get("distortionParams", []),
+                    "locked": intr.get("locked", False),
+                })
+
+            if ci_node in graph:
+                graph[ci_node]["inputs"]["viewpoints"] = ci_viewpoints
+                graph[ci_node]["inputs"]["intrinsics"] = ci_intrinsics
+                print(f"  Injected {len(ci_viewpoints)} viewpoints + "
+                      f"{len(ci_intrinsics)} intrinsics into {ci_node}")
+
+        with open(temp_mg_path, "w", encoding="utf-8") as f:
+            json.dump(pipeline_data, f, indent=4)
 
 
     # -- Step 2: Run Meshroom --------------------------------------------
@@ -539,13 +653,22 @@ def run_pipeline(job):
         "progress": 40
     })
     
-    command = [
-        MESHROOM_EXE,
-        "--pipeline", temp_mg_path,
-        "--input",    input_images_abs_dir,
-        "--cache",    cache_dir,
-        "--verbose",  "info",
-    ]
+    if two_sides_mode:
+        # Viewpoints already injected — run without --input
+        command = [
+            MESHROOM_EXE,
+            "--pipeline", temp_mg_path,
+            "--cache",    cache_dir,
+            "--verbose",  "info",
+        ]
+    else:
+        command = [
+            MESHROOM_EXE,
+            "--pipeline", temp_mg_path,
+            "--input",    input_images_abs_dir,
+            "--cache",    cache_dir,
+            "--verbose",  "info",
+        ]
 
     # Redirect the child process temp directory to our output folder.
     # Meshroom creates MeshroomCache inside the temp dir, so results

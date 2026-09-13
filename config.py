@@ -2,3 +2,5 @@
 MESHROOM_EXE="D:/Meshroom-2025.1.0/meshroom_batch.exe"
 
 TEMPLATE_MG="./template.mg"
+TEMPLATE_TURNTABLE_MG="./template_turntable.mg"
+TEMPLATE_TWO_SIDES_MG="./template_two_sides.mg"
