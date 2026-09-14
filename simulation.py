@@ -1,5 +1,7 @@
 import subprocess
 import os
+import json
+import csv
 import cloudflare_r2 as r2
 from cloudflare_r2 import INPUT_IMAGES, RIG_IMAGES, TWO_SIDES_RIG1, TWO_SIDES_RIG2
 
@@ -92,6 +94,36 @@ def delete_all_files():
     print("R2 bucket cleaned up!")
 
 
+def update_statistics(output_dir="./output", csv_file="stats.csv"):
+    stats_path = os.path.join(output_dir, "stats.json")
+    if not os.path.exists(stats_path):
+        print(f"No stats.json found in {output_dir}. Skipping statistics update.")
+        return
+
+    try:
+        with open(stats_path, "r", encoding="utf-8") as f:
+            stats = json.load(f)
+            
+        file_exists = os.path.exists(csv_file)
+        
+        with open(csv_file, "a", newline="", encoding="utf-8") as csvfile:
+            fieldnames = [
+                "timestamp", "job_id", "status",
+                "run_time_seconds", "max_ram_mb", "min_ram_calculated", "cpu_cores",
+                "photo_count", "resolution_mp", "mode", "depthmap_downscale", "max_input_points",
+                "output_size_mb", "target_gpu"
+            ]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            if not file_exists:
+                writer.writeheader()
+                
+            writer.writerow(stats)
+            
+        print(f"Successfully appended run statistics to {csv_file}!")
+    except Exception as e:
+        print(f"Error updating statistics: {e}")
+
 if __name__ == "__main__":
     print("Starting the simulation...")
 
@@ -110,5 +142,6 @@ if __name__ == "__main__":
     print("Docker Container Finishes its job!")
 
     download_result()
+    update_statistics()
     delete_all_files()
 

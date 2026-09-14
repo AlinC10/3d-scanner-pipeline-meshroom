@@ -582,6 +582,9 @@ def run_pipeline(job):
     :return: Dictionary containing the status of the pipeline run.
     :rtype: dict
     """
+    
+    start_time = time.time()
+    
     progress_update(job, {
         "status": "PIPELINE CONFIGURATION",
         "progress": 0
@@ -908,6 +911,44 @@ def run_pipeline(job):
 
     print(f"\n  All files in: {output_dir_abs}")
     print(f"{'='*55}\n")
+
+    run_time = time.time() - start_time
+    # Calculate output size proxy using the raw High OBJ (Geometry complexity correlates best with peak RAM)
+    high_obj_path = os.path.join(output_dir_abs, "Texturing_1", "texturedMesh.obj")
+    if not os.path.exists(high_obj_path) and os.path.exists(os.path.join(output_dir_abs, "Texturing_1")):
+        # Fallback to whatever obj is in there if renamed
+        for f in os.listdir(os.path.join(output_dir_abs, "Texturing_1")):
+            if f.endswith(".obj"):
+                high_obj_path = os.path.join(output_dir_abs, "Texturing_1", f)
+                break
+
+    output_size_mb = round(os.path.getsize(high_obj_path) / (1024 * 1024), 2) if os.path.exists(high_obj_path) else 0.0
+
+    from datetime import datetime
+    stats = {
+        "timestamp": datetime.now().isoformat(timespec='seconds'),
+        "job_id": job.get("id", "unknown"),
+        "run_time_seconds": round(run_time, 2),
+        "max_ram_mb": round(globals().get("_highest_ram", 0), 2),
+        "min_ram_calculated": int(float(os.getenv("RAM_MIN_GB", "32"))),
+        "cpu_cores": psutil.cpu_count(logical=True),
+        "photo_count": job.get("photo_count", 0),
+        "resolution_mp": job.get("resolution_mp", 12.0),
+        "mode": job.get("mode", "single"),
+        "depthmap_downscale": job.get("depthmap_downscale", 2),
+        "max_input_points": job.get("max_input_points", 10000000),
+        "output_size_mb": output_size_mb,
+        "target_gpu": job.get("target_gpu", "unknown"),
+        "status": "success"
+    }
+    
+    stats_path = os.path.join(output_dir_abs, "stats.json")
+    try:
+        with open(stats_path, "w", encoding="utf-8") as sf:
+            json.dump(stats, sf, indent=4)
+        print(f"  [STATS] Saved run statistics to {stats_path}")
+    except Exception as e:
+        print(f"  [STATS] Failed to save stats: {e}")
 
     if not MESHROOM_EXE.startswith("D:"):
         progress_update(job, {

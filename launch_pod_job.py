@@ -109,6 +109,24 @@ def get_pod_status(pod_id: str) -> dict:
     data = gql(query, {"podId": pod_id})
     return data["pod"]
 
+def get_pod_logs(pod_id: str) -> str:
+    """
+    Fetches the logs of a specific pod.
+    :param pod_id: The ID of the pod
+    :type pod_id: str
+    :return: The log string
+    :rtype: str
+    """
+    query = """
+    query PodLog($podId: String!) {
+      podLog(input: {podId: $podId}) {
+        stepLog
+      }
+    }
+    """
+    response = gql(query, {"podId": pod_id})
+    return response.get("podLog", {}).get("stepLog", "")
+
 def stop_pod(pod_id: str) -> str:
     """
     Stop a running pod on RunPod.
@@ -142,12 +160,16 @@ def launch_job(job: dict):
     mode = job.get("mode", "single")
     two_sides = (mode == "two-sides")
     
+    # Store these key parameters in the job dict so they flow into the final stats
+    job["depthmap_downscale"] = job.get("depthmap_downscale", 2)
+    job["max_input_points"] = job.get("max_input_points", 10000000)
+    
     # Calculate required RAM
     ram_min_gb = calculate_required_ram(
         num_images=photo_count,
         resolution_mp=resolution_mp,
-        depthmap_downscale=2,
-        max_input_points=10000000,
+        depthmap_downscale=job["depthmap_downscale"],
+        max_input_points=job["max_input_points"],
         two_sides_mode=two_sides
     )
     print(f"Calculated required RAM: {ram_min_gb} GB for {photo_count} photos ({mode} mode)")
@@ -191,17 +213,26 @@ def launch_job(job: dict):
         "RAM_MIN_GB": str(ram_min_gb),
     }
     
-    # Forward Cloudflare R2 secrets, Meshroom URLs, or Hugging Face Tokens if they exist locally
-    for key in ["R2_ENDPOINT_URL", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "MESHROOM_URL", "MESHROOM_FALLBACK_URL", "HF_TOKEN"]:
-        if os.getenv(key):
-            env[key] = os.getenv(key)
-
     # Loop continuously until we successfully run a pod
     attempt = 1
     original_len = len(gpu_fallback_list)
     while True:
         for target_gpu in gpu_fallback_list:
             print(f"\n--- Attempt {attempt} (Targeting: {target_gpu}) ---")
+            
+            # Inject the target GPU into the job JSON so main.py can save it in stats
+            job["target_gpu"] = target_gpu
+            
+            # Prepare environment variables for the pod
+            env = {
+                "JOB_JSON": json.dumps(job),
+                "RAM_MIN_GB": str(ram_min_gb),
+            }
+            
+            # Forward Cloudflare R2 secrets, Meshroom URLs, or Hugging Face Tokens if they exist locally
+            for key in ["R2_ENDPOINT_URL", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "MESHROOM_URL", "MESHROOM_FALLBACK_URL", "HF_TOKEN"]:
+                if os.getenv(key):
+                    env[key] = os.getenv(key)
             
             try:
                 pod_id = create_pod(env, target_gpu)

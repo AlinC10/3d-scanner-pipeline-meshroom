@@ -183,6 +183,12 @@ def create_output_zip(folder_path: str, zip_path: str) -> str:
       else:
           logging.warning("[ZIP] Low 3MF file not found: %s", low_3mf_file)
 
+      # --- stats.json ---
+      stats_file = os.path.join(folder_path, "stats.json")
+      if os.path.isfile(stats_file):
+          zipf.write(stats_file, "stats.json")
+
+  logging.info("[ZIP] Successfully created %s", zip_path)
   return zip_path
 
 def upload_generated_obj(folder_path: str, object_name: str = "output.zip",
