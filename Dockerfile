@@ -3,7 +3,7 @@
 
 FROM nvidia/cuda:12.9.2-runtime-ubuntu24.04
 
-RUN apt-get update && apt-get install -y python3 python3-venv
+RUN apt-get update && apt-get install -y python3 python3-venv aria2
 
 WORKDIR /app
 COPY . .

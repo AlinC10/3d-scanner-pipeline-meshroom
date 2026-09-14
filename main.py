@@ -23,7 +23,7 @@ import threading
 import psutil
 import atexit
 from PIL import Image
-import clouddlare_r2 as r2
+import cloudflare_r2 as r2
 
 # Draco compression support (optional — graceful fallback if not installed)
 try:
@@ -81,7 +81,7 @@ def _monitor_memory():
 _mem_thread = threading.Thread(target=_monitor_memory, daemon=True)
 _mem_thread.start()
 # === CONSTANTS ===
-from clouddlare_r2 import OUTPUT_DIR, INPUT_IMAGES, RIG_IMAGES, TWO_SIDES_RIG1, TWO_SIDES_RIG2, R2_PIPELINE_IMAGES_BUCKET
+from cloudflare_r2 import OUTPUT_DIR, INPUT_IMAGES, RIG_IMAGES, TWO_SIDES_RIG1, TWO_SIDES_RIG2, R2_PIPELINE_IMAGES_BUCKET
 from config import *
 
 

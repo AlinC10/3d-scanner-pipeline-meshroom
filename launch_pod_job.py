@@ -75,8 +75,8 @@ def create_pod(env_dict: dict, gpu_type_id: str) -> str:
         "gpuTypeId": gpu_type_id,
         "name": f"meshroom-dynamic-job",
         "imageName": IMAGE_NAME,
-        # Give enough disk space to extract the 22.5 GB Meshroom + cache + output
-        "containerDiskInGb": 60, 
+        # Give enough disk space to extract the 22.5 GB Meshroom + cache + output (tarball itself is 13.3 GB!)
+        "containerDiskInGb": 80, 
         "volumeInGb": 0,         
         "env": env_list,
         "ports": "",
@@ -191,17 +191,17 @@ def launch_job(job: dict):
         "RAM_MIN_GB": str(ram_min_gb),
     }
     
-    # Forward Cloudflare R2 secrets or Fallback URLs if they exist locally
-    for key in ["R2_ENDPOINT_URL", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "MESHROOM_FALLBACK_URL"]:
+    # Forward Cloudflare R2 secrets, Meshroom URLs, or Hugging Face Tokens if they exist locally
+    for key in ["R2_ENDPOINT_URL", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "MESHROOM_URL", "MESHROOM_FALLBACK_URL", "HF_TOKEN"]:
         if os.getenv(key):
             env[key] = os.getenv(key)
 
     # Loop continuously until we successfully run a pod
     attempt = 1
+    original_len = len(gpu_fallback_list)
     while True:
         for target_gpu in gpu_fallback_list:
             print(f"\n--- Attempt {attempt} (Targeting: {target_gpu}) ---")
-            attempt += 1
             
             try:
                 pod_id = create_pod(env, target_gpu)
@@ -210,9 +210,10 @@ def launch_job(job: dict):
                 print(f"Failed to create pod for {target_gpu}: {e}")
                 print("Trying next GPU in fallback list...")
                 
-                if attempt / len(gpu_fallback_list) == 4 and attempt % len(gpu_fallback_list) == 0:
+                if attempt == 4 * original_len:
                     gpu_fallback_list.extend(complementary_gpus_list)
                 
+                attempt += 1
                 time.sleep(2)
                 continue
 
@@ -242,6 +243,11 @@ def launch_job(job: dict):
                 return True
             else:
                 print("Pod exited very quickly. RAM check likely failed on this host. Retrying...")
+                
+                if attempt == 4 * original_len:
+                    gpu_fallback_list.extend(complementary_gpus_list)
+                
+                attempt += 1
                 time.sleep(10) # Cooldown before trying a new pod
                 
         print("\n[!] Cycled through the entire GPU list without success.")

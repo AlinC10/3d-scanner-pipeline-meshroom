@@ -4,11 +4,13 @@ import json
 import tarfile
 import urllib.request
 import shutil
+import subprocess
 from main import run_pipeline
 
-MESHROOM_URL = "https://zenodo.org/records/16887472/files/Meshroom-2025.1.0-Linux.tar.gz"
-# Provide a fallback URL here (e.g., your R2 bucket or a free HuggingFace Dataset link)
+MESHROOM_URL = os.getenv("MESHROOM_URL", "https://zenodo.org/records/16887472/files/Meshroom-2025.1.0-Linux.tar.gz")
+# Provide a fallback URL here (e.g., Zenodo or a secondary mirror)
 MESHROOM_FALLBACK_URL = os.getenv("MESHROOM_FALLBACK_URL", "") 
+HF_TOKEN = os.getenv("HF_TOKEN", "")
 DOWNLOAD_PATH = "/workspace/Meshroom.tar.gz"
 EXTRACT_PATH = "/workspace"
 MESHROOM_DIR = os.path.join(EXTRACT_PATH, "Meshroom-2025.1.0")
@@ -30,6 +32,28 @@ def mem_total_gb() -> int:
         print(f"Could not read /proc/meminfo: {e}")
     return 0
 
+def download_fast(url: str, output_path: str, token: str = ""):
+    """Downloads a file using aria2c with 16 parallel connections for maximum speed."""
+    out_dir = os.path.dirname(output_path)
+    out_file = os.path.basename(output_path)
+    
+    cmd = [
+        "aria2c",
+        "-x", "16",           # 16 maximum connections per server
+        "-s", "16",           # Split file into 16 parts
+        "-k", "5M",           # 5MB chunk size
+        "--dir", out_dir,
+        "--out", out_file,
+    ]
+    
+    # If a Hugging Face token is provided and URL is from Hugging Face
+    hf_auth = token or HF_TOKEN
+    if hf_auth and "huggingface.co" in url:
+        cmd.append(f"--header=Authorization: Bearer {hf_auth}")
+        
+    cmd.append(url)
+    subprocess.run(cmd, check=True)
+
 def download_and_extract_meshroom():
     """
     Download and extract the Meshroom package.
@@ -44,12 +68,12 @@ def download_and_extract_meshroom():
     os.makedirs(EXTRACT_PATH, exist_ok=True)
     
     try:
-        urllib.request.urlretrieve(MESHROOM_URL, DOWNLOAD_PATH)
+        download_fast(MESHROOM_URL, DOWNLOAD_PATH)
     except Exception as e:
         print(f"[boot] WARNING: Failed to download from primary URL: {e}")
         if MESHROOM_FALLBACK_URL:
             print(f"[boot] Attempting to download from fallback URL: {MESHROOM_FALLBACK_URL}")
-            urllib.request.urlretrieve(MESHROOM_FALLBACK_URL, DOWNLOAD_PATH)
+            download_fast(MESHROOM_FALLBACK_URL, DOWNLOAD_PATH)
         else:
             print("[boot] CRITICAL: No fallback URL provided and primary failed.")
             sys.exit(1)

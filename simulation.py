@@ -1,7 +1,7 @@
 import subprocess
 import os
-import clouddlare_r2 as r2
-from clouddlare_r2 import INPUT_IMAGES, RIG_IMAGES, TWO_SIDES_RIG1, TWO_SIDES_RIG2
+import cloudflare_r2 as r2
+from cloudflare_r2 import INPUT_IMAGES, RIG_IMAGES, TWO_SIDES_RIG1, TWO_SIDES_RIG2
 
 def send_images(input_images_path: str = INPUT_IMAGES):
     """Upload flat single-camera images to R2.

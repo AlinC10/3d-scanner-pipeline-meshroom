@@ -55,8 +55,11 @@ def get_ast_info(node, source_code):
     return "\n".join(info)
 
 def generate():
-    os.makedirs("d:/meshroom_test/docs/technical_deep", exist_ok=True)
-    for py_file in glob.glob("d:/meshroom_test/*.py"):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    docs_dir = os.path.join(base_dir, "docs", "technical_deep")
+    os.makedirs(docs_dir, exist_ok=True)
+    
+    for py_file in glob.glob(os.path.join(base_dir, "*.py")):
         if "generate_docs" in py_file: continue
         
         with open(py_file, 'r', encoding='utf-8') as f:
@@ -73,7 +76,7 @@ def generate():
         md += get_ast_info(tree, code)
         
         out_name = os.path.basename(py_file).replace('.py', '.md')
-        out_path = f"d:/meshroom_test/docs/technical_deep/{out_name}"
+        out_path = os.path.join(docs_dir, out_name)
         with open(out_path, 'w', encoding='utf-8') as f:
             f.write(md)
             
